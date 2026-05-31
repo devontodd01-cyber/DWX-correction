@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DWX Service Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap');
+:root {
+  --bg:    #080809;
+  --bg2:   #0f0f11;
+  --bg3:   #161618;
+  --bg4:   #1e1e21;
+  --bg5:   #26262a;
+  --b:     rgba(255,255,255,0.07);
+  --b2:    rgba(255,255,255,0.12);
+  --t1:    #e4e4ea;
+  --t2:    #8888a0;
+  --t3:    #44445a;
+  --grn:   #2dd87a;
+  --grn2:  rgba(45,216,122,0.1);
+  --amb:   #f0a000;
+  --amb2:  rgba(240,160,0,0.1);
+  --red:   #ff5555;
+  --red2:  rgba(255,85,85,0.1);
+  --blu:   #4f8ef7;
+  --blu2:  rgba(79,142,247,0.1);
+  --cyn:   #1ab8d4;
+  --pur:   #9f7afa;
+  --mono:  'JetBrains Mono', monospace;
+  --sans:  'Syne', sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--t1);font-family:var(--mono);font-size:12px;display:flex;flex-direction:column}
+
+/* ── TOP BAR ── */
+#bar{height:44px;min-height:44px;background:var(--bg2);border-bottom:1px solid var(--b2);display:flex;align-items:stretch;gap:0}
+.bar-brand{display:flex;align-items:center;padding:0 18px;border-right:1px solid var(--b2);gap:8px;white-space:nowrap}
+.bar-brand .logo{font-family:var(--sans);font-weight:800;font-size:14px;letter-spacing:0.06em;color:var(--t1)}
+.bar-brand .logo span{color:var(--grn)}
+.bar-serials{display:flex;align-items:center;gap:6px;padding:0 12px;flex:1;border-right:1px solid var(--b2);overflow-x:auto}
+.bar-serials::-webkit-scrollbar{height:3px}
+.bar-serials::-webkit-scrollbar-thumb{background:var(--bg5)}
+.chip{padding:3px 11px;border-radius:20px;border:1px solid var(--b);color:var(--t2);font-size:11px;cursor:pointer;white-space:nowrap;transition:.15s;font-family:var(--mono)}
+.chip:hover{border-color:var(--b2);color:var(--t1)}
+.chip.on{background:var(--blu2);border-color:var(--blu);color:var(--blu)}
+.bar-tabs{display:flex;height:100%}
+.tab{display:flex;align-items:center;padding:0 14px;font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);cursor:pointer;border-right:1px solid var(--b);border-bottom:2px solid transparent;transition:.15s;white-space:nowrap}
+.tab:hover{color:var(--t2);background:var(--bg3)}
+.tab.on{color:var(--t1);border-bottom-color:var(--grn);background:var(--bg3)}
+
+/* ── BODY ── */
+#body{display:flex;flex:1;overflow:hidden}
+
+/* ── SIDEBAR ── */
+#side{width:220px;min-width:220px;background:var(--bg2);border-right:1px solid var(--b);display:flex;flex-direction:column;overflow-y:auto}
+#side::-webkit-scrollbar{width:3px}
+#side::-webkit-scrollbar-thumb{background:var(--bg5)}
+.s-sec{padding:12px 14px;border-bottom:1px solid var(--b)}
+.s-lbl{font-family:var(--sans);font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);margin-bottom:8px}
+
+/* drop zone */
+#dz{border:1px dashed var(--b2);border-radius:6px;padding:14px 10px;text-align:center;cursor:pointer;transition:.2s;color:var(--t3);font-size:11px;line-height:1.6}
+#dz:hover,#dz.drag{border-color:var(--grn);color:var(--grn);background:var(--grn2)}
+#dz .di{font-size:22px;display:block;margin-bottom:4px}
+
+/* status line */
+#status{font-size:10px;color:var(--t3);padding:6px 0 0;min-height:18px;transition:.3s}
+#status.ok{color:var(--grn)}
+#status.err{color:var(--red)}
+#status.info{color:var(--blu)}
+
+/* info rows */
+.ir{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--b);font-size:11px;gap:6px}
+.ik{color:var(--t3);flex-shrink:0}
+.iv{color:var(--t1);text-align:right}
+.iv.w{color:var(--amb)}
+.iv.e{color:var(--red)}
+.iv.g{color:var(--grn)}
+
+/* source counters */
+.src{display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer}
+.src-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.src-name{flex:1;font-size:11px;color:var(--t2)}
+.src-n{font-size:11px;font-weight:600;color:var(--t1)}
+
+/* side actions */
+.sa{display:block;width:100%;padding:6px 10px;background:var(--bg3);border:1px solid var(--b);border-radius:4px;color:var(--t2);font-family:var(--mono);font-size:11px;cursor:pointer;text-align:left;margin-bottom:4px;transition:.15s}
+.sa:hover{border-color:var(--b2);color:var(--t1);background:var(--bg4)}
+
+/* ── CONTENT ── */
+#content{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px}
+#content::-webkit-scrollbar{width:4px}
+#content::-webkit-scrollbar-thumb{background:var(--bg5)}
+
+/* empty */
+#empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--t3)}
+#empty .ei{font-size:44px;opacity:.35}
+#empty h2{font-family:var(--sans);font-size:16px;color:var(--t2)}
+#empty p{font-size:11px;text-align:center;max-width:260px;line-height:1.8}
+
+/* section header */
+.sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.st{font-family:var(--sans);font-size:12px;font-weight:700;letter-spacing:.04em;display:flex;align-items:center;gap:8px}
+.st::before{content:'';display:inline-block;width:3px;height:13px;border-radius:2px;background:var(--grn)}
+
+/* grid */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.g1{display:grid;grid-template-columns:1fr;gap:12px}
+
+/* panel */
+.p{background:var(--bg2);border:1px solid var(--b);border-radius:8px;overflow:hidden}
+.ph{padding:9px 13px;border-bottom:1px solid var(--b);display:flex;align-items:center;justify-content:space-between}
+.pt{font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--t2)}
+.pb{padding:13px}
+
+/* stat card */
+.sc{background:var(--bg2);border:1px solid var(--b);border-radius:8px;padding:12px 14px;display:flex;align-items:center;gap:12px}
+.sc-icon{font-size:20px}
+.sc-val{font-family:var(--sans);font-size:20px;font-weight:800;color:var(--t1);line-height:1}
+.sc-lbl{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-top:3px}
+
+/* badge */
+.badge{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;font-family:var(--sans);letter-spacing:.04em;text-transform:uppercase}
+.bg{background:var(--grn2);color:var(--grn)}
+.ba{background:var(--amb2);color:var(--amb)}
+.br{background:var(--red2);color:var(--red)}
+.bb{background:var(--blu2);color:var(--blu)}
+
+/* chart */
+.cw{position:relative;height:170px}
+.cw.tall{height:230px}
+
+/* flag rows */
+.fl{display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-bottom:1px solid var(--b);font-size:11px}
+.fl:last-child{border:none}
+.fi{width:14px;flex-shrink:0;text-align:center}
+.fm{color:var(--t2);flex:1}
+.fv{font-weight:600}
+
+/* table */
+.tbl{width:100%;border-collapse:collapse;font-size:11px}
+.tbl th{padding:7px 12px;text-align:left;color:var(--t3);font-family:var(--sans);font-size:9px;letter-spacing:.1em;text-transform:uppercase;border-bottom:1px solid var(--b2);white-space:nowrap}
+.tbl td{padding:6px 12px;border-bottom:1px solid var(--b);color:var(--t2)}
+.tbl tr:last-child td{border:none}
+.tbl tr:hover td{background:var(--bg3)}
+.tbl .hi{color:var(--t1)}
+.tbl .ok{color:var(--grn)}
+.tbl .wa{color:var(--amb)}
+.tbl .er{color:var(--red)}
+
+/* correction entry */
+.ce{background:var(--bg3);border:1px solid var(--b);border-left:3px solid var(--b2);border-radius:6px;padding:11px 13px;margin-bottom:8px}
+.ce.g{border-left-color:var(--grn)}
+.ce.a{border-left-color:var(--amb)}
+.ce.r{border-left-color:var(--red)}
+.ce-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.ce-id{font-family:var(--sans);font-size:13px;font-weight:700}
+.ce-date{font-size:10px;color:var(--t3)}
+
+/* offset chips */
+.oc{display:flex;gap:3px;flex-wrap:wrap;margin-top:6px}
+.och{background:var(--bg4);border:1px solid var(--b);border-radius:3px;padding:1px 5px;font-size:10px;color:var(--t2)}
+.och.hi{border-color:var(--amb);color:var(--amb)}
+.och.lo{border-color:var(--red);color:var(--red)}
+
+/* dice inputs */
+.dg{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:10px}
+.dc{background:var(--bg3);border:1px solid var(--b);border-radius:4px;padding:7px 5px;text-align:center;transition:.15s}
+.dc label{display:block;font-size:9px;color:var(--t3);margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em}
+.dc input{width:100%;background:transparent;border:none;outline:none;color:var(--t1);font-family:var(--mono);font-size:12px;text-align:center}
+.dc input::placeholder{color:var(--t3)}
+.dc.ok{border-color:var(--grn);background:var(--grn2)}
+.dc.wa{border-color:var(--amb);background:var(--amb2)}
+.dc.er{border-color:var(--red);background:var(--red2)}
+
+/* text input */
+.ti{width:100%;background:var(--bg3);border:1px solid var(--b);border-radius:4px;color:var(--t1);font-family:var(--mono);font-size:11px;padding:6px 9px;outline:none}
+.ti:focus{border-color:var(--blu)}
+.ti::placeholder{color:var(--t3)}
+textarea.ti{resize:vertical;min-height:70px;line-height:1.5}
+
+/* button */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:4px;font-family:var(--sans);font-size:11px;font-weight:700;letter-spacing:.04em;cursor:pointer;border:none;transition:.15s}
+.btn-g{background:var(--grn);color:#000}
+.btn-g:hover{opacity:.85}
+.btn-b{background:var(--blu);color:#fff}
+.btn-b:hover{opacity:.85}
+.btn-o{background:transparent;border:1px solid var(--b2);color:var(--t2)}
+.btn-o:hover{background:var(--bg3);color:var(--t1)}
+
+/* diag result */
+.dr{background:var(--bg3);border:1px solid var(--b);border-radius:6px;padding:12px;margin-top:10px}
+.dr-title{font-family:var(--sans);font-size:11px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+
+/* tool bar */
+.tb-bar{height:3px;background:var(--bg5);border-radius:2px;margin-top:3px}
+.tb-fill{height:100%;border-radius:2px;background:var(--grn);transition:width .5s}
+.tb-fill.wa{background:var(--amb)}
+.tb-fill.er{background:var(--red)}
+
+/* timeline */
+.te{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--b);align-items:flex-start}
+.te:last-child{border:none}
+.te-icon{font-size:13px;flex-shrink:0;margin-top:1px}
+.te-main{flex:1}
+.te-label{font-size:11px;color:var(--t1)}
+.te-sub{font-size:10px;color:var(--t3);margin-top:2px}
+
+/* loading overlay */
+#ov{position:fixed;inset:0;background:rgba(8,8,9,.8);display:none;align-items:center;justify-content:center;z-index:999}
+.spin{width:28px;height:28px;border:2px solid var(--b2);border-top-color:var(--grn);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* toast */
+#toast{position:fixed;bottom:14px;right:14px;background:var(--bg3);border:1px solid var(--b2);border-radius:6px;padding:8px 14px;font-size:11px;color:var(--t2);opacity:0;transition:opacity .3s;z-index:999;pointer-events:none;max-width:300px}
+#toast.show{opacity:1}
+#toast.ok{border-color:var(--grn);color:var(--grn)}
+#toast.er{border-color:var(--red);color:var(--red)}
+
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bg5);border-radius:2px}
+</style>
+</head>
+<body>
+
+<div id="ov"><div class="spin"></div></div>
+<div id="toast"></div>
+
+<!-- TOP BAR -->
+<div id="bar">
+  <div class="bar-brand"><div class="logo">DWX<span>SERVICE</span></div></div>
+  <div class="bar-serials" id="serials"></div>
+  <div class="bar-tabs" id="tabs">
+    <div class="tab on" data-v="overview">Overview</div>
+    <div class="tab" data-v="sysreports">System Reports</div>
+    <div class="tab" data-v="corrlog">Correction Logs</div>
+    <div class="tab" data-v="dice">Dice</div>
+    <div class="tab" data-v="all">All Data</div>
+  </div>
+</div>
+
+<!-- BODY -->
+<div id="body">
+  <!-- SIDEBAR -->
+  <div id="side">
+    <div class="s-sec">
+      <div class="s-lbl">Load Data</div>
+      <div id="dz">
+        <span class="di">📂</span>
+        Drop VPanel ZIP or TXT<br>or click to browse
+        <input type="file" id="fi" accept=".zip,.txt" multiple style="display:none">
+      </div>
+      <div id="status">Ready</div>
+    </div>
+
+    <div class="s-sec">
+      <div class="s-lbl">Sources</div>
+      <div class="src"><div class="src-dot" style="background:var(--blu)"></div><div class="src-name">System Reports</div><div class="src-n" id="n-sys">—</div></div>
+      <div class="src"><div class="src-dot" style="background:var(--grn)"></div><div class="src-name">Correction Logs</div><div class="src-n" id="n-cor">—</div></div>
+      <div class="src"><div class="src-dot" style="background:var(--amb)"></div><div class="src-name">Dice Runs</div><div class="src-n" id="n-dic">—</div></div>
+    </div>
+
+    <div class="s-sec" id="s-machine" style="display:none">
+      <div class="s-lbl">Machine</div>
+      <div id="s-machine-body"></div>
+    </div>
+
+    <div class="s-sec">
+      <div class="s-lbl">Actions</div>
+      <button class="sa" onclick="refresh()">↻  Refresh from DB</button>
+      <button class="sa" onclick="clearSel()">✕  Clear selection</button>
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div id="content">
+    <div id="empty">
+      <div class="ei">🔬</div>
+      <h2>Select a machine</h2>
+      <p>Drop a VPanel ZIP to load from DB, or choose a serial above once machines are loaded.</p>
+    </div>
+    <div id="vc" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════
+// CONFIG
+// ══════════════════════════════════════
+const URL  = 'https://jutzduabwuyygqxntzrp.supabase.co';
+const KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1dHpkdWFid3V5eWdxeG50enJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxNDU1NTUsImV4cCI6MjA5NTcyMTU1NX0._NXHHjoBb8jnHMWiIrww8r1rjx49EeWI8Hb3OZY4ios';
+const H    = {'apikey':KEY,'Authorization':'Bearer '+KEY,'Content-Type':'application/json'};
+
+// ══════════════════════════════════════
+// STATE
+// ══════════════════════════════════════
+const S = {
+  serial: null,
+  view: 'overview',
+  sys: [],   // system_reports rows
+  cor: [],   // correction_logs rows
+  dic: [],   // dice_runs rows
+  machines: [],
+  charts: {}
+};
+
+// ══════════════════════════════════════
+// SUPABASE
+// ══════════════════════════════════════
+async function dbGet(table, qs='') {
+  const r = await fetch(`${URL}/rest/v1/${table}?${qs}`, {headers:H});
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.message || JSON.stringify(j));
+  return j;
+}
+async function dbInsert(table, row) {
+  const r = await fetch(`${URL}/rest/v1/${table}`, {
+    method:'POST', headers:{...H,'Prefer':'return=minimal'}, body:JSON.stringify(row)
+  });
+  if (!r.ok) { const j = await r.json(); throw new Error(j.message || JSON.stringify(j)); }
+}
+
+// ══════════════════════════════════════
+// BOOT
+// ══════════════════════════════════════
+async function boot() {
+  setupUI();
+  await loadMachines();
+}
+
+function setupUI() {
+  // tabs
+  document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('on'));
+    t.classList.add('on');
+    S.view = t.dataset.v;
+    renderView();
+  }));
+  // drop zone
+  const dz = document.getElementById('dz');
+  const fi = document.getElementById('fi');
+  dz.addEventListener('click', () => fi.click());
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+  dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag'); handleFiles(e.dataTransfer.files); });
+  fi.addEventListener('change', e => { handleFiles(e.target.files); fi.value=''; });
+}
+
+async function loadMachines() {
+  try {
+    const rows = await dbGet('system_reports', 'select=serial&order=serial.asc');
+    const serials = [...new Set(rows.map(r => r.serial).filter(Boolean))].sort();
+    // also check correction_logs for machines not yet in sys reports
+    const cr = await dbGet('correction_logs', 'select=serial&order=serial.asc').catch(()=>[]);
+    const cs = [...new Set(cr.map(r => r.serial).filter(Boolean))];
+    S.machines = [...new Set([...serials,...cs])].sort();
+    renderChips();
+  } catch(e) { toast('DB error: '+e.message,'er'); }
+}
+
+function renderChips() {
+  const el = document.getElementById('serials');
+  el.innerHTML = S.machines.map(s =>
+    `<div class="chip${s===S.serial?' on':''}" onclick="selectMachine('${s}')">${s}</div>`
+  ).join('');
+}
+
+async function selectMachine(serial) {
+  S.serial = serial;
+  renderChips();
+  setStatus('Loading '+serial+'…','info');
+  loading(true);
+  try {
+    const [sys, cor, dic] = await Promise.all([
+      dbGet('system_reports',  `serial=eq.${serial}&order=created_at.asc`),
+      dbGet('correction_logs', `serial=eq.${serial}&order=corr_count.asc`),
+      dbGet('dice_runs',       `serial=eq.${serial}&order=created_at.asc`).catch(()=>[])
+    ]);
+    S.sys = sys || [];
+    S.cor = cor || [];
+    S.dic = dic || [];
+    updateCounts();
+    renderSideMachine();
+    document.getElementById('empty').style.display = 'none';
+    document.getElementById('vc').style.display = '';
+    renderView();
+    setStatus('Loaded '+serial,'ok');
+  } catch(e) {
+    toast('Load error: '+e.message,'er');
+    setStatus('Error: '+e.message,'err');
+  } finally { loading(false); }
+}
+
+function clearSel() {
+  S.serial=null; S.sys=[]; S.cor=[]; S.dic=[];
+  renderChips(); updateCounts();
+  document.getElementById('s-machine').style.display='none';
+  document.getElementById('empty').style.display='';
+  document.getElementById('vc').style.display='none';
+  setStatus('Ready');
+}
+
+async function refresh() {
+  await loadMachines();
+  if (S.serial) await selectMachine(S.serial);
+}
+
+function updateCounts() {
+  document.getElementById('n-sys').textContent = S.sys.length || '—';
+  document.getElementById('n-cor').textContent = S.cor.length || '—';
+  document.getElementById('n-dic').textContent = S.dic.length || '—';
+}
+
+function renderSideMachine() {
+  const sec = document.getElementById('s-machine');
+  const body = document.getElementById('s-machine-body');
+  sec.style.display = '';
+  const lat = S.sys[S.sys.length-1] || {};
+  const latc = S.cor[S.cor.length-1] || {};
+  body.innerHTML = [
+    ['Model',    lat.model],
+    ['VPanel',   lat.vpanel_ver],
+    ['Corr #',   lat.correction_count || latc.corr_count],
+    ['Work Time',lat.machine_work_time],
+    ['Reports',  S.sys.length],
+    ['Corr Logs',S.cor.length],
+    ['Dice Runs',S.dic.length],
+  ].filter(([,v]) => v != null)
+   .map(([k,v]) => `<div class="ir"><span class="ik">${k}</span><span class="iv">${v}</span></div>`)
+   .join('');
+}
+
+// ══════════════════════════════════════
+// FILE HANDLING
+// ══════════════════════════════════════
+async function handleFiles(files) {
+  for (const f of Array.from(files)) {
+    const name = f.name.toLowerCase();
+    setStatus('Reading '+f.name+'…','info');
+    try {
+      if (name.endsWith('.zip')) await handleZip(f);
+      else if (name.endsWith('.txt') || name.endsWith('.log')) {
+        const text = await f.text();
+        await handleText(text, f.name);
+      }
+    } catch(e) { toast('File error: '+e.message,'er'); setStatus('Error','err'); }
+  }
+}
+
+async function handleZip(file) {
+  const zip = await JSZip.loadAsync(file);
+  const entries = Object.values(zip.files).filter(f => !f.dir);
+
+  let sysText = null, corrText = null;
+
+  for (const entry of entries) {
+    if (!/\.(txt|log)$/i.test(entry.name)) continue;
+    const t = await entry.async('text');
+    if (!sysText && /serial.{0,20}number|serialnumber/i.test(t) && /correction.{0,10}count|correctioncount/i.test(t)) {
+      sysText = t;
+    }
+    if (!corrText && /GapAP1P2Z/i.test(t)) {
+      corrText = t;
+    }
+  }
+
+  let handled = false;
+
+  if (sysText) {
+    const parsed = parseSysReport(sysText);
+    if (parsed) {
+      await saveSysReport(parsed);
+      if (!S.machines.includes(parsed.serial)) { S.machines.push(parsed.serial); S.machines.sort(); }
+      await selectMachine(parsed.serial);
+      handled = true;
+    }
+  }
+
+  if (corrText) {
+    const parsed = parseCorrLog(corrText);
+    if (parsed && parsed.serial) {
+      await saveCorrLog(parsed);
+      if (!handled) {
+        if (!S.machines.includes(parsed.serial)) { S.machines.push(parsed.serial); S.machines.sort(); }
+        await selectMachine(parsed.serial);
+        handled = true;
+      }
+    }
+  }
+
+  if (!handled) {
+    toast('No recognised files in ZIP. Expected systemreport.txt or correction log.','er');
+    setStatus('Nothing found in ZIP','err');
+    console.log('ZIP entries:', Object.keys(zip.files));
+  }
+}
+
+async function handleText(text, name) {
+  // try system report first
+  const sys = parseSysReport(text);
+  if (sys) {
+    await saveSysReport(sys);
+    if (!S.machines.includes(sys.serial)) { S.machines.push(sys.serial); S.machines.sort(); }
+    renderChips();
+    await selectMachine(sys.serial);
+    return;
+  }
+  // try correction log
+  const cor = parseCorrLog(text);
+  if (cor && (cor.gap_ap1p2z != null || cor.corr_count != null)) {
+    if (!cor.serial) { toast('Correction log found but no serial — paste serial manually?','er'); return; }
+    await saveCorrLog(cor);
+    if (!S.machines.includes(cor.serial)) { S.machines.push(cor.serial); S.machines.sort(); }
+    renderChips();
+    await selectMachine(cor.serial);
+    return;
+  }
+  toast('Could not detect file type','er');
+}
+
+// ══════════════════════════════════════
+// PARSERS
+// ══════════════════════════════════════
+function parseSysReport(text) {
+  const g  = (pat, fl='i') => { const m = text.match(new RegExp(pat,fl)); return m ? m[1]?.trim() : null; };
+  const gn = (pat) => { const v = g(pat); return v != null ? parseFloat(v) : null; };
+  const gi = (pat) => { const v = g(pat); return v != null ? parseInt(v) : null; };
+
+  const serial = g('(?:serial\\s*number|serialnumber)\\s*[=:\\-]\\s*(\\S+)');
+  if (!serial || !/^[A-Z]{3}\d{3,4}$/.test(serial)) return null;
+
+  // tools
+  let tools = [];
+  const tb = text.match(/tool(?:\s+information|\s+list)?[\s\S]{0,100}\n([\s\S]*?)(?=\n\n|\n[A-Z][a-z])/i);
+  if (tb) {
+    tb[1].split('\n').forEach(line => {
+      const m = line.match(/^\s*(\d+)\s+(.+?)\s+([\d]+:[\d]+)\s+([\d]+(?:\.[\d]+)?)\s*$/);
+      if (m) tools.push({slot:m[1], name:m[2].trim(), used:m[3], life:m[4]});
+    });
+  }
+
+  // fatal errors
+  let errs = [];
+  const eb = text.match(/(?:fatal\s+error|error\s+log)[\s\S]{0,60}\n([\s\S]*?)(?=\n\n|$)/i);
+  if (eb) {
+    eb[1].split('\n').forEach(line => {
+      const m = line.match(/(0x[0-9A-Fa-f]+).*?(\d{4}[\/-]\d{2}[\/-]\d{2})\s+(\d{2}:\d{2})/);
+      if (m) errs.push({code:m[1], date:m[2], time:m[3]});
+    });
+  }
+
+  return {
+    serial,
+    model:             g('model\\s*[=:\\-]\\s*([^\\n]+)'),
+    vpanel_ver:        g('(?:vpanel|v-panel)[^\\n]*?([\\d]+\\.[\\d.]+)'),
+    firmware_ver:      g('firmware[^\\n]*?([Vv]?[\\d]+\\.[\\d.]+)'),
+    correction_count:  gi('(?:correction\\s*count|correctioncount)\\s*[=:\\-]\\s*(\\d+)'),
+    report_date:       g('date\\s*[=:\\-]\\s*([^\\n]{6,30})'),
+    machine_work_time: g('(?:machine|total)\\s*work\\s*time[^\\n]*?([\\d]+:[\\d]+)'),
+    spindle_unit_time: g('spindle\\s*unit\\s*time[^\\n]*?([\\d]+:[\\d]+)'),
+    grad_x:            gn('(?:spindle\\s*)?gradient\\s*x\\s*[=:\\-]\\s*(-?[\\d.eE+\\-]+)'),
+    grad_y:            gn('(?:spindle\\s*)?gradient\\s*y\\s*[=:\\-]\\s*(-?[\\d.eE+\\-]+)'),
+    origin_x:          gn('origin\\s*x\\s*[=:\\-]\\s*(-?[\\d.]+)'),
+    origin_y:          gn('origin\\s*y\\s*[=:\\-]\\s*(-?[\\d.]+)'),
+    origin_z:          gn('origin\\s*z\\s*[=:\\-]\\s*(-?[\\d.]+)'),
+    tools:             tools.length ? tools : null,
+    fatal_errors:      errs.length  ? errs  : null,
+  };
+}
+
+function parseCorrLog(text) {
+  const g  = (pat, fl='i') => { const m = text.match(new RegExp(pat,fl)); return m ? m[1]?.trim() : null; };
+  const gn = (pat) => { const v = g(pat); return v != null ? parseFloat(v) : null; };
+  const gi = (pat) => { const v = g(pat); return v != null ? parseInt(v) : null; };
+  const ga = (pat) => {
+    const m = text.match(new RegExp(pat,'i'));
+    if (!m) return null;
+    const arr = m[1].split(/[\s,]+/).map(Number).filter(v => !isNaN(v));
+    return arr.length ? arr : null;
+  };
+
+  const serial = g('(?:serial\\s*number|serialnumber)\\s*[=:\\-]\\s*(\\S+)');
+
+  const bArr = ga('B-?Axis(?:Angle)?Offset\\(BASE\\)\\s*=\\s*\\[([^\\]]+)\\]')
+            || ga('B_?AxisAngleOffsetBASE\\s*=\\s*\\[([^\\]]+)\\]');
+  const aArr = ga('A-?Axis(?:Angle)?Offset\\(BASE\\)\\s*=\\s*\\[([^\\]]+)\\]')
+            || ga('A_?AxisAngleOffsetBASE\\s*=\\s*\\[([^\\]]+)\\]');
+
+  const spread = arr => arr && arr.length ? Math.max(...arr)-Math.min(...arr) : null;
+
+  const dateM = text.match(/(\d{4}[\/\-]\d{2}[\/\-]\d{2})/);
+
+  return {
+    serial:      serial && /^[A-Z]{3}\d{3,4}$/.test(serial) ? serial : null,
+    corr_count:  gi('(?:correction\\s*count|correctioncount)\\s*[=:\\-]\\s*(\\d+)'),
+    run_date:    dateM ? dateM[1].replace(/\//g,'-') : null,
+    gap_ap1p2z:  gi('GapAP1P2Z\\s*=\\s*(-?\\d+)'),
+    grad_x:      gn('(?:spindle\\s*)?gradient\\s*x\\s*[=:\\-]\\s*(-?[\\d.eE+\\-]+)'),
+    grad_y:      gn('(?:spindle\\s*)?gradient\\s*y\\s*[=:\\-]\\s*(-?[\\d.eE+\\-]+)'),
+    origin_x:    gn('origin\\s*x\\s*[=:\\-]\\s*(-?[\\d.]+)'),
+    origin_y:    gn('origin\\s*y\\s*[=:\\-]\\s*(-?[\\d.]+)'),
+    origin_z:    gn('origin\\s*z\\s*[=:\\-]\\s*(-?[\\d.]+)'),
+    a_ang_base:  aArr,
+    b_ang_base:  bArr,
+    a_spread:    spread(aArr),
+    b_spread:    spread(bArr),
+  };
+}
+
+// ══════════════════════════════════════
+// DB SAVES
+// ══════════════════════════════════════
+async function saveSysReport(row) {
+  // deduplicate: same serial + correction_count
+  if (row.serial && row.correction_count != null) {
+    const ex = await dbGet('system_reports', `serial=eq.${row.serial}&correction_count=eq.${row.correction_count}&select=id`);
+    if (ex.length) { toast(`System report #${row.correction_count} already in DB`,'ok'); return; }
+  }
+  await dbInsert('system_reports', row);
+  toast(`✓ Saved system report: ${row.serial} #${row.correction_count}`, 'ok');
+}
+
+async function saveCorrLog(row) {
+  if (row.serial && row.corr_count != null) {
+    const ex = await dbGet('correction_logs', `serial=eq.${row.serial}&corr_count=eq.${row.corr_count}&select=id`);
+    if (ex.length) { toast(`Correction log #${row.corr_count} already in DB`,'ok'); return; }
+  }
+  await dbInsert('correction_logs', row);
+  toast(`✓ Saved correction log: ${row.serial} #${row.corr_count}`, 'ok');
+}
+
+// ══════════════════════════════════════
+// VIEW ROUTER
+// ══════════════════════════════════════
+function renderView() {
+  killCharts();
+  const vc = document.getElementById('vc');
+  const map = { overview: viewOverview, sysreports: viewSys, corrlog: viewCorr, dice: viewDice, all: viewAll };
+  vc.innerHTML = (map[S.view] || viewOverview)();
+  setTimeout(drawCharts, 60);
+}
+
+function killCharts() {
+  Object.values(S.charts).forEach(c => { try{c.destroy()}catch(e){} });
+  S.charts = {};
+}
+
+// ══════════════════════════════════════
+// VIEWS
+// ══════════════════════════════════════
+function viewOverview() {
+  const lat  = S.sys[S.sys.length-1] || {};
+  const latc = S.cor[S.cor.length-1] || {};
+
+  // health flags
+  const flags = [];
+  const addFlag = (lvl, msg, val) => flags.push({lvl, msg, val});
+
+  const gap = latc.gap_ap1p2z;
+  if (gap != null) {
+    if (Math.abs(gap) > 30) addFlag('r','GapAP1P2Z critical',gap);
+    else if (Math.abs(gap) > 15) addFlag('a','GapAP1P2Z elevated',gap);
+    else addFlag('g','GapAP1P2Z nominal',gap);
+  }
+
+  const gy = lat.grad_y ?? latc.grad_y;
+  if (gy != null) {
+    const a = Math.abs(gy);
+    if (a > 0.0015) addFlag('r','Spindle gradient Y high', gy.toFixed(6));
+    else if (a > 0.001) addFlag('a','Spindle gradient Y elevated', gy.toFixed(6));
+    else addFlag('g','Spindle gradient Y nominal', gy.toFixed(6));
+  }
+
+  const bs = latc.b_spread;
+  if (bs != null) {
+    if (bs > 200) addFlag('r','B-axis spread critical', bs);
+    else if (bs > 150) addFlag('a','B-axis spread elevated', bs);
+    else addFlag('g','B-axis spread nominal', bs);
+  }
+
+  if (lat.fatal_errors && lat.fatal_errors.length) {
+    const errs = lat.fatal_errors;
+    addFlag('a', `${errs.length} fatal error${errs.length>1?'s':''} in latest report`, errs[0]?.code||'');
+  }
+
+  const flagHtml = flags.length ? flags.map(f => `
+    <div class="fl">
+      <div class="fi" style="color:var(--${f.lvl==='g'?'grn':f.lvl==='a'?'amb':'red'})">${f.lvl==='g'?'✓':f.lvl==='a'?'△':'✕'}</div>
+      <div class="fm">${f.msg}</div>
+      <div class="fv" style="color:var(--${f.lvl==='g'?'grn':f.lvl==='a'?'amb':'red'})">${f.val}</div>
+    </div>`).join('') : '<div style="color:var(--t3);font-size:11px">No data yet — load a ZIP to see health flags</div>';
+
+  // tools
+  let toolHtml = '<div style="color:var(--t3);font-size:11px">No tool data</div>';
+  if (lat.tools && lat.tools.length) {
+    toolHtml = lat.tools.slice(0,8).map(t => {
+      const used = parseFloat(t.used)||0, life = parseFloat(t.life)||40;
+      const pct = Math.min(100,(used/life)*100);
+      const cls = pct>85?'er':pct>65?'wa':'';
+      return `<div style="margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;font-size:10px">
+          <span style="color:var(--t3)">#${t.slot} ${t.name}</span>
+          <span style="color:var(--${cls==='er'?'red':cls==='wa'?'amb':'t2'})">${t.used} / ${t.life}h</span>
+        </div>
+        <div class="tb-bar"><div class="tb-fill ${cls}" style="width:${pct}%"></div></div>
+      </div>`;
+    }).join('');
+  }
+
+  return `
+    <div class="sh"><div class="st">Overview — ${S.serial}</div></div>
+    <div class="g4">
+      ${sc('⏱', lat.machine_work_time||'—', 'Work Hours')}
+      ${sc('🔩', lat.spindle_unit_time||'—', 'Spindle Hours')}
+      ${sc('📐', lat.correction_count||latc.corr_count||'—', 'Calibration #')}
+      ${sc('📅', S.sys.length ? (S.sys[S.sys.length-1].report_date||'').split(' ')[0] : '—', 'Last Report')}
+    </div>
+    <div class="g2">
+      <div class="p"><div class="ph"><span class="pt">Health Flags</span></div><div class="pb">${flagHtml}</div></div>
+      <div class="p"><div class="ph"><span class="pt">Tool Hours</span></div><div class="pb">${toolHtml}</div></div>
+    </div>
+    ${S.cor.length>1?`<div class="p"><div class="ph"><span class="pt">GapAP1P2Z Trend</span></div><div class="pb"><div class="cw" data-chart="ov-gap"></div></div></div>`:''}
+    ${S.sys.length>1?`<div class="p"><div class="ph"><span class="pt">Spindle Gradient Trend</span></div><div class="pb"><div class="cw" data-chart="ov-grad"></div></div></div>`:''}
+  `;
+}
+
+function sc(icon, val, lbl) {
+  return `<div class="sc"><div class="sc-icon">${icon}</div><div><div class="sc-val">${val}</div><div class="sc-lbl">${lbl}</div></div></div>`;
+}
+
+function viewSys() {
+  if (!S.sys.length) return nodata('No system reports for this machine. Drop a VPanel ZIP to load one.');
+  const lat = S.sys[S.sys.length-1];
+
+  const fields = [
+    ['Model', lat.model], ['VPanel', lat.vpanel_ver], ['Firmware', lat.firmware_ver],
+    ['Correction #', lat.correction_count], ['Report Date', lat.report_date],
+    ['Work Time', lat.machine_work_time], ['Spindle Time', lat.spindle_unit_time],
+    ['Grad X', lat.grad_x?.toFixed(6)], ['Grad Y', lat.grad_y?.toFixed(6)],
+    ['Origin X', lat.origin_x], ['Origin Y', lat.origin_y], ['Origin Z', lat.origin_z],
+  ].filter(([,v]) => v != null);
+
+  const infoHtml = fields.map(([k,v]) => `<div class="ir"><span class="ik">${k}</span><span class="iv">${v}</span></div>`).join('');
+
+  let fatHtml = '<div style="color:var(--grn);font-size:11px">✓ No fatal errors</div>';
+  if (lat.fatal_errors && lat.fatal_errors.length) {
+    fatHtml = lat.fatal_errors.map(e =>
+      `<div class="fl"><div class="fi" style="color:var(--red)">✕</div><div class="fm">${e.code}</div><div class="fv" style="color:var(--t3)">${e.date} ${e.time}</div></div>`
+    ).join('');
+  }
+
+  const tblRows = [...S.sys].reverse().map(l => {
+    const gx = l.grad_x != null ? Math.abs(l.grad_x) : null;
+    const gy = l.grad_y != null ? Math.abs(l.grad_y) : null;
+    const gxc = gx==null?'':gx>0.0015?'er':gx>0.001?'wa':'ok';
+    const gyc = gy==null?'':gy>0.0015?'er':gy>0.001?'wa':'ok';
+    return `<tr>
+      <td class="hi">${(l.report_date||'').split(' ')[0]||'—'}</td>
+      <td>${l.correction_count||'—'}</td>
+      <td class="${gxc}">${l.grad_x?.toFixed(6)||'—'}</td>
+      <td class="${gyc}">${l.grad_y?.toFixed(6)||'—'}</td>
+      <td>${l.origin_z||'—'}</td>
+      <td style="color:var(--t3)">${l.vpanel_ver||'—'}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="sh"><div class="st">System Reports — ${S.serial} (${S.sys.length})</div></div>
+    <div class="g2">
+      <div class="p"><div class="ph"><span class="pt">Latest Snapshot</span><span style="font-size:10px;color:var(--t3)">${(lat.report_date||'').split(' ')[0]}</span></div><div class="pb">${infoHtml}</div></div>
+      <div class="p"><div class="ph"><span class="pt">Fatal Errors</span></div><div class="pb">${fatHtml}</div></div>
+    </div>
+    ${S.sys.length>1?`
+    <div class="g2">
+      <div class="p"><div class="ph"><span class="pt">Gradient X & Y</span></div><div class="pb"><div class="cw" data-chart="sys-grad"></div></div></div>
+      <div class="p"><div class="ph"><span class="pt">Origin Z Drift</span></div><div class="pb"><div class="cw" data-chart="sys-oz"></div></div></div>
+    </div>
+    <div class="g2">
+      <div class="p"><div class="ph"><span class="pt">Origin X</span></div><div class="pb"><div class="cw" data-chart="sys-ox"></div></div></div>
+      <div class="p"><div class="ph"><span class="pt">Origin Y</span></div><div class="pb"><div class="cw" data-chart="sys-oy"></div></div></div>
+    </div>`:''}
+    <div class="p"><div class="ph"><span class="pt">All Reports</span></div>
+      <div style="overflow-x:auto"><table class="tbl">
+        <thead><tr><th>Date</th><th>Corr#</th><th>Grad X</th><th>Grad Y</th><th>Origin Z</th><th>VPanel</th></tr></thead>
+        <tbody>${tblRows}</tbody>
+      </table></div>
+    </div>
+  `;
+}
+
+function viewCorr() {
+  if (!S.cor.length) return nodata('No correction logs for this machine. Drop a VPanel ZIP containing a correction log.');
+
+  const entries = [...S.cor].reverse().map(c => {
+    const gap = c.gap_ap1p2z;
+    const cls = gap==null?'':Math.abs(gap)>30?'r':Math.abs(gap)>15?'a':'g';
+    let bArr=[]; try{bArr=Array.isArray(c.b_ang_base)?c.b_ang_base:(c.b_ang_base?JSON.parse(c.b_ang_base):[]);}catch(e){}
+    let aArr=[]; try{aArr=Array.isArray(c.a_ang_base)?c.a_ang_base:(c.a_ang_base?JSON.parse(c.a_ang_base):[]);}catch(e){}
+    const bs = c.b_spread ?? (bArr.length?Math.max(...bArr)-Math.min(...bArr):null);
+    const as_ = c.a_spread ?? (aArr.length?Math.max(...aArr)-Math.min(...aArr):null);
+    const bsc = bs==null?'':bs>200?'er':bs>150?'wa':'ok';
+    const asc = as_==null?'':as_>200?'er':as_>150?'wa':'ok';
+    const gyc = c.grad_y==null?'':Math.abs(c.grad_y)>0.0015?'er':Math.abs(c.grad_y)>0.001?'wa':'ok';
+    const bchips = bArr.map(v=>{const ac=Math.abs(v)>80?'lo':Math.abs(v)>50?'hi':'';return `<div class="och ${ac}">${v}</div>`;}).join('');
+    return `<div class="ce ${cls}">
+      <div class="ce-hdr"><div class="ce-id">Calibration #${c.corr_count||'?'}</div><div class="ce-date">${c.run_date||''}</div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;font-size:11px;margin-bottom:${bArr.length?'8':'0'}px">
+        <div><div style="color:var(--t3);font-size:9px">GapAP1P2Z</div><div style="color:var(--${cls==='g'?'grn':cls==='a'?'amb':'red'})">${gap??'—'}</div></div>
+        <div><div style="color:var(--t3);font-size:9px">B Spread</div><div class="${bsc}">${bs??'—'}</div></div>
+        <div><div style="color:var(--t3);font-size:9px">A Spread</div><div class="${asc}">${as_??'—'}</div></div>
+        <div><div style="color:var(--t3);font-size:9px">Grad Y</div><div class="${gyc}">${c.grad_y?.toFixed(6)??'—'}</div></div>
+      </div>
+      ${bArr.length?`<div style="font-size:9px;color:var(--t3);margin-bottom:4px">B-AXIS OFFSETS</div><div class="oc">${bchips}</div>`:''}
+    </div>`;
+  }).join('');
+
+  return `
+    <div class="sh"><div class="st">Correction Logs — ${S.serial} (${S.cor.length})</div></div>
+    ${S.cor.length>1?`
+    <div class="g2">
+      <div class="p"><div class="ph"><span class="pt">GapAP1P2Z</span></div><div class="pb"><div class="cw" data-chart="cor-gap"></div></div></div>
+      <div class="p"><div class="ph"><span class="pt">A & B Axis Spread</span></div><div class="pb"><div class="cw" data-chart="cor-spread"></div></div></div>
+    </div>
+    <div class="p"><div class="ph"><span class="pt">B-Axis Offset Array — Latest</span></div><div class="pb"><div class="cw tall" data-chart="cor-baxis"></div></div></div>
+    `:''}
+    <div class="p"><div class="ph"><span class="pt">Entries</span></div><div class="pb">${entries}</div></div>
+  `;
+}
+
+function viewDice() {
+  const pos = [1,3,6,9];
+  const mkInputs = (prefix, label) => `
+    <div style="margin-bottom:10px">
+      <div style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px">${label}</div>
+      <div class="dg">${pos.map(p=>`<div class="dc" id="dc-${prefix}${p}"><label>${prefix.toUpperCase()}${p}</label><input type="number" id="d${prefix}${p}" step="0.001" placeholder="—" oninput="onDiceInput(this,'${prefix}',${p})"></div>`).join('')}</div>
+    </div>`;
+
+  const runs = [...S.dic].reverse();
+  const histHtml = runs.length ? runs.map(r => {
+    const vc = r.verdict==='pass'?'bg':r.verdict==='warn'?'ba':'br';
+    return `<div class="ce ${r.verdict==='pass'?'g':r.verdict==='warn'?'a':'r'}" style="margin-bottom:8px">
+      <div class="ce-hdr">
+        <div class="ce-id">#${r.corr_count||'?'} — ${r.run_date||'?'}</div>
+        <span class="badge ${vc}">${(r.verdict||'?').toUpperCase()}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:11px">
+        <div><span style="color:var(--t3)">H Dev: </span>${r.avg_h_dev?.toFixed(3)??'—'} mm</div>
+        <div><span style="color:var(--t3)">Taper: </span>${r.max_taper?.toFixed(3)??'—'} mm</div>
+      </div>
+      ${r.notes?`<div style="font-size:10px;color:var(--t3);margin-top:6px">${r.notes}</div>`:''}
+    </div>`;
+  }).join('') : '<div style="color:var(--t3);font-size:11px">No dice runs yet</div>';
+
+  return `
+    <div class="sh"><div class="st">Dice Measurements — ${S.serial}</div></div>
+    <div class="g2">
+      <div class="p"><div class="ph"><span class="pt">New Measurement</span></div><div class="pb">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+          <div><div style="font-size:9px;color:var(--t3);margin-bottom:4px">CORRECTION #</div><input class="ti" type="number" id="dCN" placeholder="52"></div>
+          <div><div style="font-size:9px;color:var(--t3);margin-bottom:4px">DATE</div><input class="ti" type="date" id="dRD"></div>
+        </div>
+        ${mkInputs('h','Height (mm)')}
+        ${mkInputs('tw','Top Width (mm)')}
+        ${mkInputs('bw','Bottom Width (mm)')}
+        <div style="margin-bottom:10px">
+          <div style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px">Notes</div>
+          <input class="ti" type="text" id="dNotes" placeholder="Optional notes…">
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-g" onclick="analyzeDice()">▶ Analyze</button>
+          <button class="btn btn-b" onclick="saveDice()">↑ Save to DB</button>
+          <button class="btn btn-o" onclick="clearDice()">✕ Clear</button>
+        </div>
+        <div id="dice-result"></div>
+      </div></div>
+
+      <div class="p"><div class="ph"><span class="pt">Run History (${S.dic.length})</span></div>
+        <div class="pb" style="max-height:560px;overflow-y:auto">${histHtml}</div>
+      </div>
+    </div>
+    ${S.dic.length>1?`
+    <div class="g2">
+      <div class="p"><div class="ph"><span class="pt">Height Dev Over Runs</span></div><div class="pb"><div class="cw" data-chart="dic-hdev"></div></div></div>
+      <div class="p"><div class="ph"><span class="pt">Max Taper Over Runs</span></div><div class="pb"><div class="cw" data-chart="dic-tap"></div></div></div>
+    </div>`:''}
+  `;
+}
+
+function viewAll() {
+  const events = [
+    ...S.sys.map(l  => ({type:'sys',  date:l.report_date||l.created_at||'', label:`System Report — Corr#${l.correction_count||'?'}`, sub:`Grad Y: ${l.grad_y?.toFixed(6)||'—'}`})),
+    ...S.cor.map(l  => ({type:'cor',  date:l.run_date||l.created_at||'',    label:`Calibration #${l.corr_count||'?'}`, sub:`Gap: ${l.gap_ap1p2z??'—'} | B-Spread: ${l.b_spread??'—'}`})),
+    ...S.dic.map(l  => ({type:'dic',  date:l.run_date||l.created_at||'',    label:`Dice Run — #${l.corr_count||'?'} (${l.verdict||'?'})`, sub:`H Dev: ${l.avg_h_dev?.toFixed(3)||'—'}mm | Taper: ${l.max_taper?.toFixed(3)||'—'}mm`})),
+  ].sort((a,b) => b.date.localeCompare(a.date));
+
+  const icons = {sys:'📋',cor:'🔧',dic:'🎲'};
+  const colors = {sys:'var(--blu)',cor:'var(--grn)',dic:'var(--amb)'};
+
+  const tl = events.map(e => `
+    <div class="te">
+      <div class="te-icon">${icons[e.type]}</div>
+      <div class="te-main">
+        <div class="te-label">${e.label}</div>
+        <div class="te-sub">${e.sub}</div>
+      </div>
+      <div style="font-size:10px;color:var(--t3);white-space:nowrap">${(e.date||'').split('T')[0].slice(5)||''}</div>
+    </div>`).join('');
+
+  return `
+    <div class="sh"><div class="st">All Data — ${S.serial}</div></div>
+    <div class="g3">
+      ${sc('📋', S.sys.length, 'System Reports')}
+      ${sc('🔧', S.cor.length, 'Correction Logs')}
+      ${sc('🎲', S.dic.length, 'Dice Runs')}
+    </div>
+    ${(S.cor.length>1&&S.sys.length>1)?`
+    <div class="p"><div class="ph"><span class="pt">GapAP1P2Z + Gradient Y Combined</span></div><div class="pb"><div class="cw tall" data-chart="all-combo"></div></div></div>`:''}
+    <div class="p"><div class="ph"><span class="pt">Timeline (${events.length} events)</span></div>
+      <div class="pb" style="max-height:500px;overflow-y:auto">${tl||'<div style="color:var(--t3)">No events</div>'}</div>
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════
+// DICE LOGIC
+// ══════════════════════════════════════
+function onDiceInput(el, prefix, pos) {
+  const cell = document.getElementById(`dc-${prefix}${pos}`);
+  const v = parseFloat(el.value);
+  cell.classList.toggle('ok', !isNaN(v));
+}
+
+function getDice() {
+  const g = id => { const v = document.getElementById(id)?.value; return v ? parseFloat(v) : null; };
+  return {
+    h1:g('dh1'),h3:g('dh3'),h6:g('dh6'),h9:g('dh9'),
+    tw1:g('dtw1'),tw3:g('dtw3'),tw6:g('dtw6'),tw9:g('dtw9'),
+    bw1:g('dbw1'),bw3:g('dbw3'),bw6:g('dbw6'),bw9:g('dbw9'),
+  };
+}
+
+function diagnose(m) {
+  const flags = [];
+  const heights = [m.h1,m.h3,m.h6,m.h9].filter(v=>v!=null);
+  let avgH=null, hDev=null, maxTaper=null, verdict='pass';
+
+  if (heights.length >= 2) {
+    avgH  = heights.reduce((a,b)=>a+b,0)/heights.length;
+    hDev  = Math.max(...heights)-Math.min(...heights);
+    const allLow = heights.every(h => h < avgH - 0.08);
+    if (hDev > 0.10) { flags.push({l:'r',msg:'Height range critical',val:`Δ${hDev.toFixed(3)}mm`}); verdict='fail'; }
+    else if (hDev > 0.05) { flags.push({l:'a',msg:'Height variation elevated',val:`Δ${hDev.toFixed(3)}mm`}); verdict='warn'; }
+    else flags.push({l:'g',msg:'Height consistent',val:`Δ${hDev.toFixed(3)}mm`});
+    if (allLow) flags.push({l:'a',msg:'All heights uniformly low — possible Z origin drift',val:''});
+  }
+
+  const tapers = [1,3,6,9].map(p => {
+    const tw=m[`tw${p}`], bw=m[`bw${p}`];
+    if (tw!=null&&bw!=null) return {p, t:tw-bw};
+    return null;
+  }).filter(Boolean);
+
+  if (tapers.length) {
+    maxTaper = Math.max(...tapers.map(x=>Math.abs(x.t)));
+    tapers.forEach(({p,t}) => {
+      if (Math.abs(t)>0.08){flags.push({l:'r',msg:`Pos ${p} taper critical`,val:`${t.toFixed(3)}mm`});verdict='fail';}
+      else if (Math.abs(t)>0.04){flags.push({l:'a',msg:`Pos ${p} taper elevated`,val:`${t.toFixed(3)}mm`});if(verdict==='pass')verdict='warn';}
+    });
+    if (!flags.some(f=>f.msg.includes('taper'))) flags.push({l:'g',msg:'Taper within range',val:`max ${maxTaper.toFixed(3)}mm`});
+  }
+
+  return {flags, verdict, avgH, hDev, maxTaper};
+}
+
+function analyzeDice() {
+  const res = diagnose(getDice());
+  const vc = res.verdict==='pass'?'bg':res.verdict==='warn'?'ba':'br';
+  const html = `<div class="dr">
+    <div class="dr-title"><span class="badge ${vc}">${res.verdict.toUpperCase()}</span> Dice Diagnosis</div>
+    ${res.flags.map(f=>`<div class="fl">
+      <div class="fi" style="color:var(--${f.l==='g'?'grn':f.l==='a'?'amb':'red'})">${f.l==='g'?'✓':f.l==='a'?'△':'✕'}</div>
+      <div class="fm">${f.msg}</div>
+      <div class="fv" style="color:var(--${f.l==='g'?'grn':f.l==='a'?'amb':'red'})">${f.val}</div>
+    </div>`).join('')}
+  </div>`;
+  document.getElementById('dice-result').innerHTML = html;
+}
+
+function clearDice() {
+  [1,3,6,9].forEach(p => ['h','tw','bw'].forEach(pre => {
+    const el = document.getElementById(`d${pre}${p}`);
+    if (el) { el.value=''; document.getElementById(`dc-${pre}${p}`)?.classList.remove('ok','wa','er'); }
+  }));
+  ['dCN','dRD','dNotes'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  const dr = document.getElementById('dice-result');
+  if (dr) dr.innerHTML='';
+}
+
+async function saveDice() {
+  if (!S.serial) return alert('Select a machine first');
+  const m = getDice();
+  const res = diagnose(m);
+  const row = {
+    serial: S.serial,
+    corr_count: parseInt(document.getElementById('dCN')?.value)||null,
+    run_date:   document.getElementById('dRD')?.value||null,
+    ...m,
+    avg_h_dev:  res.hDev,
+    max_taper:  res.maxTaper,
+    verdict:    res.verdict,
+    notes:      document.getElementById('dNotes')?.value||null,
+  };
+  loading(true);
+  try {
+    await dbInsert('dice_runs', row);
+    toast('✓ Dice run saved','ok');
+    await selectMachine(S.serial);
+  } catch(e) { toast('Save failed: '+e.message,'er'); }
+  finally { loading(false); }
+}
+
+// ══════════════════════════════════════
+// CHARTS
+// ══════════════════════════════════════
+const CD = {
+  responsive:true, maintainAspectRatio:false,
+  plugins:{ legend:{ labels:{ color:'#8888a0', font:{family:'JetBrains Mono',size:10}, boxWidth:10 }},
+            tooltip:{ backgroundColor:'#161618', borderColor:'#26262a', borderWidth:1, titleColor:'#e4e4ea', bodyColor:'#8888a0', titleFont:{family:'JetBrains Mono'}, bodyFont:{family:'JetBrains Mono'} }},
+  scales:{ x:{ ticks:{color:'#44445a',font:{family:'JetBrains Mono',size:9}}, grid:{color:'rgba(255,255,255,0.03)'} },
+           y:{ ticks:{color:'#44445a',font:{family:'JetBrains Mono',size:9}}, grid:{color:'rgba(255,255,255,0.03)'} } }
+};
+
+const DS = (label, data, color, dash=false) => ({
+  label, data,
+  borderColor:color, backgroundColor:color+'18',
+  borderWidth:2, borderDash:dash?[4,3]:[],
+  pointRadius:4, pointBackgroundColor:color,
+  tension:0.3, fill:false
+});
+
+function drawCharts() {
+  document.querySelectorAll('[data-chart]').forEach(el => {
+    const id = el.dataset.chart;
+    const canvas = document.createElement('canvas');
+    el.appendChild(canvas);
+    const chart = makeChart(id, canvas.getContext('2d'));
+    if (chart) S.charts[id] = chart;
+  });
+}
+
+function makeChart(id, ctx) {
+  const SL = S.sys;
+  const CL = S.cor;
+  const DL = S.dic;
+  const slbl = SL.map(l => (l.report_date||l.created_at||'').split('T')[0].slice(5)||`#${l.correction_count}`);
+  const clbl = CL.map(l => l.run_date?.slice(5)||`#${l.corr_count}`);
+  const dlbl = DL.map(l => l.run_date?.slice(5)||`#${l.corr_count}`);
+
+  switch(id) {
+    case 'ov-gap':
+      return new Chart(ctx,{type:'line',data:{labels:clbl,datasets:[DS('GapAP1P2Z',CL.map(l=>l.gap_ap1p2z),'#2dd87a')]},options:CD});
+    case 'ov-grad':
+      return new Chart(ctx,{type:'line',data:{labels:slbl,datasets:[DS('Grad X',SL.map(l=>l.grad_x),'#4f8ef7'),DS('Grad Y',SL.map(l=>l.grad_y),'#1ab8d4',true)]},options:CD});
+    case 'sys-grad':
+      return new Chart(ctx,{type:'line',data:{labels:slbl,datasets:[DS('Grad X',SL.map(l=>l.grad_x),'#4f8ef7'),DS('Grad Y',SL.map(l=>l.grad_y),'#1ab8d4',true)]},options:CD});
+    case 'sys-oz':
+      return new Chart(ctx,{type:'line',data:{labels:slbl,datasets:[DS('Origin Z',SL.map(l=>l.origin_z),'#9f7afa')]},options:CD});
+    case 'sys-ox':
+      return new Chart(ctx,{type:'line',data:{labels:slbl,datasets:[DS('Origin X',SL.map(l=>l.origin_x),'#4f8ef7')]},options:CD});
+    case 'sys-oy':
+      return new Chart(ctx,{type:'line',data:{labels:slbl,datasets:[DS('Origin Y',SL.map(l=>l.origin_y),'#1ab8d4')]},options:CD});
+    case 'cor-gap':
+      return new Chart(ctx,{type:'line',data:{labels:clbl,datasets:[DS('GapAP1P2Z',CL.map(l=>l.gap_ap1p2z),'#2dd87a')]},options:CD});
+    case 'cor-spread': {
+      const bspr = CL.map(l => { if(l.b_spread!=null)return l.b_spread; const a=parseArr(l.b_ang_base);return a?Math.max(...a)-Math.min(...a):null; });
+      const aspr = CL.map(l => { if(l.a_spread!=null)return l.a_spread; const a=parseArr(l.a_ang_base);return a?Math.max(...a)-Math.min(...a):null; });
+      return new Chart(ctx,{type:'line',data:{labels:clbl,datasets:[DS('B Spread',bspr,'#f0a000'),DS('A Spread',aspr,'#4f8ef7',true)]},options:CD});
+    }
+    case 'cor-baxis': {
+      const lat = CL[CL.length-1];
+      const arr = parseArr(lat?.b_ang_base);
+      if (!arr) return null;
+      return new Chart(ctx,{type:'bar',data:{labels:arr.map((_,i)=>`P${i}`),datasets:[{
+        label:'B Offset (Base)', data:arr,
+        backgroundColor:arr.map(v=>Math.abs(v)>80?'rgba(255,85,85,.65)':Math.abs(v)>50?'rgba(240,160,0,.65)':'rgba(45,216,122,.65)'),
+        borderColor:arr.map(v=>Math.abs(v)>80?'#ff5555':Math.abs(v)>50?'#f0a000':'#2dd87a'),
+        borderWidth:1
+      }]},options:{...CD,plugins:{...CD.plugins,legend:{display:false}}}});
+    }
+    case 'dic-hdev':
+      return new Chart(ctx,{type:'line',data:{labels:dlbl,datasets:[DS('Avg H Dev (mm)',DL.map(l=>l.avg_h_dev),'#f0a000')]},options:CD});
+    case 'dic-tap':
+      return new Chart(ctx,{type:'line',data:{labels:dlbl,datasets:[DS('Max Taper (mm)',DL.map(l=>l.max_taper),'#ff5555')]},options:CD});
+    case 'all-combo': {
+      const opts = JSON.parse(JSON.stringify(CD));
+      opts.scales = {
+        x: CD.scales.x,
+        yGap:  {...CD.scales.y, position:'left',  title:{display:true,text:'GapAP1P2Z',color:'#2dd87a',font:{size:9}}},
+        yGrad: {...CD.scales.y, position:'right', grid:{display:false}, title:{display:true,text:'Grad Y',color:'#1ab8d4',font:{size:9}}}
+      };
+      return new Chart(ctx,{type:'line',data:{labels:clbl,datasets:[
+        {...DS('GapAP1P2Z',CL.map(l=>l.gap_ap1p2z),'#2dd87a'),yAxisID:'yGap'},
+        {...DS('Grad Y',SL.map(l=>l.grad_y),'#1ab8d4',true),yAxisID:'yGrad'},
+      ]},options:opts});
+    }
+    default: return null;
+  }
+}
+
+function parseArr(v) {
+  if (!v) return null;
+  if (Array.isArray(v)) return v;
+  try { return JSON.parse(v); } catch(e){ return null; }
+}
+
+// ══════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════
+function nodata(msg) {
+  return `<div style="display:flex;align-items:center;justify-content:center;min-height:180px;color:var(--t3);font-size:11px;text-align:center;padding:20px">${msg}</div>`;
+}
+function loading(v) { document.getElementById('ov').style.display = v?'flex':'none'; }
+function setStatus(msg, type='') {
+  const el = document.getElementById('status');
+  el.textContent = msg; el.className = type;
+}
+function toast(msg, type='') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'show '+(type||'');
+  clearTimeout(el._t);
+  el._t = setTimeout(()=>el.classList.remove('show'), 3500);
+}
+
+// ══════════════════════════════════════
+// GO
+// ══════════════════════════════════════
+boot();
+</script>
+</body>
+</html>
