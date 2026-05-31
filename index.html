@@ -456,7 +456,7 @@ async function selectMachine(serial) {
     const [sys, cor, dic] = await Promise.all([
       dbGet('system_reports',  `serial=eq.${serial}&order=created_at.asc`),
       dbGet('correction_logs', `serial=eq.${serial}&order=corr_count.asc`),
-      dbGet('dice_runs',       `serial=eq.${serial}&order=created_at.asc`).catch(()=>[])
+      dbGet('dice_runs',       `serial_number=eq.${serial}&order=created_at.asc`).catch(()=>[])
     ]);
     S.sys = sys || [];
     S.cor = cor || [];
