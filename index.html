@@ -458,47 +458,67 @@ async function handleZip(file) {
   const zip = await JSZip.loadAsync(file);
   const entries = Object.values(zip.files).filter(f => !f.dir);
 
-  let sysText = null, corrText = null;
+  // Collect ALL system report files (main + autosave folder)
+  const sysEntries = entries.filter(e =>
+    /systemreport/i.test(e.name) && /\.txt$/i.test(e.name)
+  );
+  // Also catch any txt with SerialNumber + CorrectionCount
+  const otherTxt = entries.filter(e =>
+    /\.txt$/i.test(e.name) && !sysEntries.includes(e)
+  );
 
-  for (const entry of entries) {
-    if (!/\.(txt|log)$/i.test(entry.name)) continue;
-    const t = await entry.async('text');
-    if (!sysText && /serial.{0,20}number|serialnumber/i.test(t) && /correction.{0,10}count|correctioncount/i.test(t)) {
-      sysText = t;
-    }
-    if (!corrText && /GapAP1P2Z/i.test(t)) {
-      corrText = t;
-    }
-  }
-
+  let corrText = null;
+  let lastSerial = null;
+  let savedCount = 0;
   let handled = false;
 
-  if (sysText) {
-    const parsed = parseSysReport(sysText);
+  // Parse and save all system reports found
+  for (const entry of sysEntries) {
+    const t = await entry.async('text');
+    const parsed = parseSysReport(t);
     if (parsed) {
       await saveSysReport(parsed);
-      if (!S.machines.includes(parsed.serial)) { S.machines.push(parsed.serial); S.machines.sort(); }
-      await selectMachine(parsed.serial);
+      lastSerial = parsed.serial;
+      savedCount++;
       handled = true;
     }
   }
 
+  // Check remaining txt files for system reports or correction logs
+  for (const entry of otherTxt) {
+    const t = await entry.async('text');
+    if (/SerialNumber:/i.test(t) && /CorrectionCount:/i.test(t)) {
+      const parsed = parseSysReport(t);
+      if (parsed) {
+        await saveSysReport(parsed);
+        lastSerial = parsed.serial;
+        savedCount++;
+        handled = true;
+      }
+    } else if (!corrText && /GapAP1P2Z/i.test(t)) {
+      corrText = t;
+    }
+  }
+
+  // Save correction log if found
   if (corrText) {
     const parsed = parseCorrLog(corrText);
     if (parsed && parsed.serial) {
       await saveCorrLog(parsed);
-      if (!handled) {
-        if (!S.machines.includes(parsed.serial)) { S.machines.push(parsed.serial); S.machines.sort(); }
-        await selectMachine(parsed.serial);
-        handled = true;
-      }
+      lastSerial = lastSerial || parsed.serial;
+      handled = true;
     }
   }
 
-  if (!handled) {
-    toast('No recognised files in ZIP. Expected systemreport.txt or correction log.','er');
+  if (handled && lastSerial) {
+    if (!S.machines.includes(lastSerial)) { S.machines.push(lastSerial); S.machines.sort(); }
+    renderChips();
+    setStatus(`Loaded ${savedCount} report${savedCount>1?'s':''} for ${lastSerial}`,'ok');
+    await selectMachine(lastSerial);
+  } else {
+    toast('No system reports found in ZIP','er');
     setStatus('Nothing found in ZIP','err');
-    console.log('ZIP entries:', Object.keys(zip.files));
+    console.log('ZIP entries:', entries.map(e=>e.name));
   }
 }
 
