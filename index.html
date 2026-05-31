@@ -1073,12 +1073,13 @@ function viewSys() {
 
   return `
     <div class="sh"><div class="st">System Reports — ${S.serial} (${S.sys.length})</div></div>
+
+    ${compHtml}
+
     <div class="g2">
       <div class="p"><div class="ph"><span class="pt">Latest Snapshot</span><span style="font-size:10px;color:var(--t2)">${(lat.report_date||'').split(' ')[0]}</span></div><div class="pb">${infoHtml}</div></div>
       <div class="p"><div class="ph"><span class="pt">Fatal Errors</span></div><div class="pb">${fatHtml}</div></div>
     </div>
-
-    ${compHtml}
 
     <div class="p">
       <div class="ph"><span class="pt">A & B Axis Angle Offsets — Latest Report</span></div>
