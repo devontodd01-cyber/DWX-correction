@@ -529,49 +529,98 @@ async function handleText(text, name) {
 // PARSERS
 // ══════════════════════════════════════
 function parseSysReport(text) {
-  const g  = (pat, fl='i') => { const m = text.match(new RegExp(pat,fl)); return m ? m[1]?.trim() : null; };
-  const gn = (pat) => { const v = g(pat); return v != null ? parseFloat(v) : null; };
-  const gi = (pat) => { const v = g(pat); return v != null ? parseInt(v) : null; };
+  // Must have SerialNumber to be a system report
+  const serialM = text.match(/^SerialNumber:\s*(\S+)/im);
+  if (!serialM) return null;
+  const serial = serialM[1].trim();
+  if (!/^[A-Z]{3}\d{3,4}$/i.test(serial)) return null;
 
-  const serial = g('(?:serial\\s*number|serialnumber)\\s*[=:\\-]\\s*(\\S+)');
-  if (!serial || !/^[A-Z]{3}\d{3,4}$/.test(serial)) return null;
+  const gl = (key) => { const m = text.match(new RegExp('^\\s*' + key + ':\\s*(.+)$','im')); return m ? m[1].trim() : null; };
 
-  // tools
+  // Date
+  const dateM = text.match(/^Date:\s*(.+)$/im);
+  const report_date = dateM ? dateM[1].trim() : null;
+
+  // VPanel: App: "VPanel for DWX - 4.15.0"
+  const appM = text.match(/App:\s*"[^"]*-\s*([\d.]+)"/i);
+  const vpanel_ver = appM ? appM[1] : null;
+
+  // Firmware main
+  const fwM = text.match(/^\s*Main:\s*(V[\d]+)/im);
+  const firmware_ver = fwM ? fwM[1] : null;
+
+  // Correction count
+  const ccM = text.match(/CorrectionCount:\s*(\d+)/i);
+  const correction_count = ccM ? parseInt(ccM[1]) : null;
+
+  // Total work time
+  const wtM = text.match(/TotalWorkTime:\s*([\d]+:[\d]+)/i);
+  const machine_work_time = wtM ? wtM[1] : null;
+
+  // Spindle unit total time
+  const suM = text.match(/SpindleUnit:[\s\S]{0,100}?TotalTime:\s*([\d]+:[\d]+)/i);
+  const spindle_unit_time = suM ? suM[1] : null;
+
+  // Spindle gradient x and y
+  const gradM = text.match(/SpindleGradient:[\s\S]{0,100}?x:\s*(-?[\d.]+)[\s\S]{0,50}?y:\s*(-?[\d.]+)/i);
+  const grad_x = gradM ? parseFloat(gradM[1]) : null;
+  const grad_y = gradM ? parseFloat(gradM[2]) : null;
+
+  // Origin from EXOFS
+  const originM = text.match(/EXOFS:\s*\{x:\s*(-?[\d]+),\s*y:\s*(-?[\d]+),\s*z:\s*(-?[\d]+)/i);
+  const origin_x = originM ? parseInt(originM[1]) : null;
+  const origin_y = originM ? parseInt(originM[2]) : null;
+  const origin_z = originM ? parseInt(originM[3]) : null;
+
+  // A-axis AngleOffset(Base)
+  const aArrM = text.match(/A-AXIS:[\s\S]{0,500}?AngleOffset\(Base\):\s*\[([^\]]+)\]/i);
+  const a_ang_base = aArrM ? aArrM[1].split(',').map(v=>parseInt(v.trim())).filter(v=>!isNaN(v)) : null;
+
+  // B-axis AngleOffset(Base)
+  const bArrM = text.match(/B-AXIS:[\s\S]{0,500}?AngleOffset\(Base\):\s*\[([^\]]+)\]/i);
+  const b_ang_base = bArrM ? bArrM[1].split(',').map(v=>parseInt(v.trim())).filter(v=>!isNaN(v)) : null;
+
+  const spread = arr => arr && arr.length ? Math.max(...arr) - Math.min(...arr) : null;
+
+  // XA-Angle as gap proxy
+  const xaM = text.match(/XA-Angle:\s*(-?[\d]+)/i);
+  const gap_ap1p2z = xaM ? parseInt(xaM[1]) : null;
+
+  // Tools — find named tools only
   let tools = [];
-  const tb = text.match(/tool(?:\s+information|\s+list)?[\s\S]{0,100}\n([\s\S]*?)(?=\n\n|\n[A-Z][a-z])/i);
-  if (tb) {
-    tb[1].split('\n').forEach(line => {
-      const m = line.match(/^\s*(\d+)\s+(.+?)\s+([\d]+:[\d]+)\s+([\d]+(?:\.[\d]+)?)\s*$/);
-      if (m) tools.push({slot:m[1], name:m[2].trim(), used:m[3], life:m[4]});
-    });
+  const toolBlock = text.match(/ToolInformation:([\s\S]+?)(?=\nIntelligentToolControl|\nCleaning|# << End)/i);
+  if (toolBlock) {
+    const re = /# Type (\d+)\s*\n\s*- Name:\s*"([^"]+)"\s*\n\s*LifeTime:\s*([\d:]+)\s*\n\s*WorkTime:\s*\[([^\]]+)\]/gi;
+    let m;
+    while ((m = re.exec(toolBlock[1])) !== null) {
+      if (m[2] !== 'null') {
+        const used = m[4].split(',')[0].trim();
+        tools.push({type: parseInt(m[1]), name: m[2].trim(), life: m[3], used});
+      }
+    }
   }
 
-  // fatal errors
+  // Fatal errors — only ones with real dates
   let errs = [];
-  const eb = text.match(/(?:fatal\s+error|error\s+log)[\s\S]{0,60}\n([\s\S]*?)(?=\n\n|$)/i);
-  if (eb) {
-    eb[1].split('\n').forEach(line => {
-      const m = line.match(/(0x[0-9A-Fa-f]+).*?(\d{4}[\/-]\d{2}[\/-]\d{2})\s+(\d{2}:\d{2})/);
-      if (m) errs.push({code:m[1], date:m[2], time:m[3]});
-    });
+  const errBlock = text.match(/FatalErrorLog:([\s\S]+?)(?=\n# << End|$)/i);
+  if (errBlock) {
+    const re = /ID:\s*(0x[0-9A-Fa-f]+).*?DATE:\s*(\d{4}-\d{2}-\d{2}[^}]*)/gi;
+    let em;
+    while ((em = re.exec(errBlock[1])) !== null) {
+      errs.push({code: em[1], date: em[2].trim()});
+    }
   }
 
   return {
-    serial,
-    model:             g('model\\s*[=:\\-]\\s*([^\\n]+)'),
-    vpanel_ver:        g('(?:vpanel|v-panel)[^\\n]*?([\\d]+\\.[\\d.]+)'),
-    firmware_ver:      g('firmware[^\\n]*?([Vv]?[\\d]+\\.[\\d.]+)'),
-    correction_count:  gi('(?:correction\\s*count|correctioncount)\\s*[=:\\-]\\s*(\\d+)'),
-    report_date:       g('date\\s*[=:\\-]\\s*([^\\n]{6,30})'),
-    machine_work_time: g('(?:machine|total)\\s*work\\s*time[^\\n]*?([\\d]+:[\\d]+)'),
-    spindle_unit_time: g('spindle\\s*unit\\s*time[^\\n]*?([\\d]+:[\\d]+)'),
-    grad_x:            gn('(?:spindle\\s*)?gradient\\s*x\\s*[=:\\-]\\s*(-?[\\d.eE+\\-]+)'),
-    grad_y:            gn('(?:spindle\\s*)?gradient\\s*y\\s*[=:\\-]\\s*(-?[\\d.eE+\\-]+)'),
-    origin_x:          gn('origin\\s*x\\s*[=:\\-]\\s*(-?[\\d.]+)'),
-    origin_y:          gn('origin\\s*y\\s*[=:\\-]\\s*(-?[\\d.]+)'),
-    origin_z:          gn('origin\\s*z\\s*[=:\\-]\\s*(-?[\\d.]+)'),
-    tools:             tools.length ? tools : null,
-    fatal_errors:      errs.length  ? errs  : null,
+    serial, model: gl('Model'), vpanel_ver, firmware_ver,
+    correction_count, report_date, machine_work_time, spindle_unit_time,
+    grad_x, grad_y, origin_x, origin_y, origin_z,
+    a_ang_base, b_ang_base,
+    a_spread: spread(a_ang_base),
+    b_spread: spread(b_ang_base),
+    gap_ap1p2z,
+    tools:        tools.length ? tools : null,
+    fatal_errors: errs.length  ? errs  : null,
   };
 }
 
