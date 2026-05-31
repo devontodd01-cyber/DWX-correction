@@ -327,9 +327,84 @@ async function dbInsert(table, row) {
   if (!r.ok) { const j = await r.json(); throw new Error(j.message || JSON.stringify(j)); }
 }
 
-// ══════════════════════════════════════
-// BOOT
-// ══════════════════════════════════════
+// ── Error code lookup ──────────────────────────────────────────────
+const EC = {
+  '1000-0001':{msg:'X limit switch not found',action:'Remove obstacles. Check/adjust X-axis limit switch, wiring, or replace switch/motor/main board.'},
+  '1000-0002':{msg:'Y limit switch not found',action:'Remove obstacles. Check/adjust Y-axis limit switch, wiring, or replace switch/motor/main board.'},
+  '1000-0004':{msg:'Z limit switch not found',action:'Remove obstacles. Check/adjust Z-axis limit switch, wiring, or replace switch/motor/main board.'},
+  '1000-0008':{msg:'A limit switch not found',action:'Remove obstacles. Check/adjust A-axis limit switch or motor wiring, or replace motor.'},
+  '1000-0010':{msg:'B limit switch not found',action:'Remove obstacles. Check/adjust B-axis limit switch or motor wiring, or replace motor.'},
+  '1001-0000':{msg:'X-axis motor experienced excessive current',action:'Remove obstacles. Check wiring. Replace X-axis motor or main board.'},
+  '1001-0001':{msg:'Y-axis motor experienced excessive current',action:'Remove obstacles. Check wiring. Replace Y-axis motor or main board.'},
+  '1001-0002':{msg:'Z-axis motor experienced excessive current',action:'Remove obstacles. Check wiring. Replace Z-axis motor or main board.'},
+  '1001-0004':{msg:'A-axis motor experienced excessive current',action:'Remove obstacles. Check wiring. Replace A-axis motor or main board.'},
+  '1001-0008':{msg:'B-axis motor experienced excessive current',action:'Remove obstacles. Check wiring. Replace B-axis motor or main board.'},
+  '1002-0000':{msg:'X-axis motor experienced position deviation',action:'Check wiring. Reduce feed rate. Replace X-axis motor or main board.'},
+  '1002-0001':{msg:'Y-axis motor experienced position deviation',action:'Check wiring. Reduce feed rate. Replace Y-axis motor or main board.'},
+  '1002-0002':{msg:'Z-axis motor experienced position deviation',action:'Check wiring. Reduce feed rate. Replace Z-axis motor or main board.'},
+  '1002-0004':{msg:'A-axis motor experienced position deviation',action:'Check wiring. Reduce feed rate. Replace A-axis motor or main board.'},
+  '1002-0008':{msg:'B-axis motor experienced position deviation',action:'Check wiring. Reduce feed rate. Replace B-axis motor or main board.'},
+  '1003-0000':{msg:'Communication error with driver board',action:'Check wiring between boards. Replace driver or main board.'},
+  '1004-0000':{msg:'Emergency stop was activated',action:'Check E-stop button and wiring. Replace if needed.'},
+  '1005-0000':{msg:'Cover was opened during operation',action:'Keep cover closed during milling. Check cover sensor and wiring.'},
+  '1006-0000':{msg:'Operation panel communication error',action:'Check operation panel wiring. Replace panel or main board.'},
+  '1007-0000':{msg:'Ambient temperature too high',action:'Check room temperature. Clean machine vents. Check cooling fan.'},
+  '1008-0000':{msg:'Driver board temperature too high',action:'Check cooling fan and vents. Replace driver board if needed.'},
+  '1009-0000':{msg:'Internal memory access error',action:'Check/replace SD card. Replace main board if needed.'},
+  '100A-0000':{msg:'Communication error (USB)',action:'Check USB cable. Restart PC and machine. Replace USB cable or board.'},
+  '100B-0000':{msg:'Machine initialisation error',action:'Restart machine. Check all wiring. Replace main board if needed.'},
+  '1015-0000':{msg:'The ATC unit limit switch was not found',action:'Adjust ATC limit switch position. Check wiring or replace ATC unit.'},
+  '1016-0000':{msg:'The ATC unit experienced position deviation',action:'Adjust ATC limit switch. Check wiring or replace ATC unit.'},
+  '1017-0000':{msg:'The ATC unit experienced excessive current',action:'Check ATC unit for obstacles. Check wiring or replace ATC unit.'},
+  '1018-0000':{msg:'Tool chuck count reached maintenance limit',action:'Perform ATC maintenance. Clean collet and chuck mechanism.'},
+  '1019-0000':{msg:'The chucking motor limit switch was not found',action:'Adjust ATC limit switch (top/bottom). Check wiring or replace ATC unit.'},
+  '101A-0000':{msg:'The chucking motor experienced excessive current',action:'Adjust ATC limit switch (top/bottom). Check wiring or replace ATC unit.'},
+  '101B-0000':{msg:'The tool sensor was not found',action:'Adjust tool sensor position. Check wiring or replace tool sensor.'},
+  '101C-0000':{msg:'The tool sensor is in incorrect status',action:'Adjust tool sensor position. Check wiring or replace tool sensor.'},
+  '101D-0000':{msg:'Tool is not attached',action:'Attach tool correctly. Check tool sensor and ATC operation.'},
+  '101E-0000':{msg:'Tool has not been released',action:'Check tool release mechanism. Adjust ATC or replace collet.'},
+  '101F-0000':{msg:'The position sensor was not found (ATC)',action:'Adjust position sensor. Check wiring or replace sensor.'},
+  '1020-0000':{msg:'The position sensor is in incorrect status',action:'Adjust position sensor. Check wiring or replace sensor.'},
+  '1021-0000':{msg:'Milling data error: format error',action:'Check milling data (NC code) format and repost from CAM.'},
+  '1022-0000':{msg:'Milling data error: no start command',action:'Check milling data for missing start command.'},
+  '1023-0000':{msg:'Milling data error: no end command',action:'Check milling data for missing end command.'},
+  '1024-0000':{msg:'Milling data error: command cannot be executed while stopped',action:'Check milling data (NC code) and repost.'},
+  '1025-0000':{msg:'Milling data error: wrong command detected',action:'Check milling data for unsupported commands.'},
+  '1026-0000':{msg:'Milling data error: address not defined',action:'Check milling data (NC code) for unsupported commands.'},
+  '1027-0000':{msg:'Milling data error: parameter not defined',action:'Check milling data (NC code) parameters.'},
+  '1028-0000':{msg:'Milling data error: operation cannot be executed',action:'Check milling data (NC code) for unsupported commands.'},
+  '1029-0000':{msg:'The spindle experienced an overload',action:'Check blade, milling conditions, material. Replace spindle or motor if needed.'},
+  '102A-0000':{msg:'The spindle experienced overcurrent',action:'Check blade, milling conditions, material. Warm up spindle if cold. Replace spindle/motor if needed.'},
+  '102B-0000':{msg:'The spindle motor temperature is too high',action:'Readjust milling parameters. Check material. Replace spindle, motor, or thermistor board if needed.'},
+  '102C-0000':{msg:'Communication error between spindle control circuit and motor',action:'Check spindle motor wiring. Replace spindle, motor, or main board if needed.'},
+  '102D-0000':{msg:'The spindle cannot be turned',action:'Check spindle motor wiring. Replace spindle, motor, or main board. Warm up if cold.'},
+  '102E-0000':{msg:'The mechanical part has collided',action:'Check operation procedures and tool attachment. Check installation of all components.'},
+  '102E-0001':{msg:'The changer has collided with the adapter',action:'Push the adapter all the way to the back of the stocker.'},
+  '102F-0000':{msg:'The ionizer is not working',action:'Operate dust collector to dry ionizer. Drain water from regulator. Check air compressor dryer. Replace ionizer if broken.'},
+  '1030-0000':{msg:'The dust collector is not working',action:'Check dust collector power and suction power.'},
+  '1031-0000':{msg:'Error occurred in the control board',action:'Check wiring between boards. Replace board if needed.'},
+  '103B-0000':{msg:'Automatic correction not yet finished',action:'Perform automatic correction before starting milling.'},
+  '103D-0000':{msg:'Milling bur cannot reach milling position',action:'Adjust milling bur holder position. Check Z-axis milling data range.'},
+  '1047-0002':{msg:'Machine internal memory cannot be accessed',action:'Check/replace SD card. Replace changer main board if needed.'},
+  '1049-0000':{msg:'The adapter cannot be released',action:'Check adapter/stocker for deformation and dirt. Adjust changer position. Check adapter sensor.'},
+  '104A-0000':{msg:'The adapter could not be grasped',action:'Check adapter/stocker for deformation and dirt. Adjust changer position. Check adapter sensor.'},
+  '104B-0000':{msg:'The adapter was not found',action:'Check adapter presence, barcode label, and barcode sensor cleanliness.'},
+  '104C-0000':{msg:'The adapter ID could not be read',action:'Check barcode label condition and barcode sensor cleanliness.'},
+  '104D-0000':{msg:'The adapter is not compatible',action:'Use a compatible adapter. Check adapter type setting in VPanel.'},
+  '104E-0000':{msg:'The adapter is already in the stocker',action:'Check disc changer stocker. Remove duplicate adapter.'},
+  '104F-0000':{msg:'The stocker is full',action:'Remove an adapter from the stocker before adding another.'},
+  '1060-0000':{msg:'The spindle type does not match',action:'Check spindle type setting in VPanel matches installed spindle.'},
+  '106E-0000':{msg:'Spindle unit maintenance required',action:'Perform spindle unit maintenance (collet cleaning or replacement).'},
+};
+
+function lookupError(code, param) {
+  // Normalise: strip 0x prefix, uppercase, zero-pad to 4 chars
+  const c = code.replace(/^0x/i,'').toUpperCase().padStart(4,'0');
+  const p = (param||'0000').replace(/^0x/i,'').toUpperCase().padStart(4,'0');
+  return EC[`${c}-${p}`] || EC[`${c}-0000`] || null;
+}
+
+
 async function boot() {
   setupUI();
   await loadMachines();
@@ -820,9 +895,19 @@ function viewSys() {
 
   let fatHtml = '<div style="color:var(--grn);font-size:11px">✓ No fatal errors</div>';
   if (lat.fatal_errors && lat.fatal_errors.length) {
-    fatHtml = lat.fatal_errors.map(e =>
-      `<div class="fl"><div class="fi" style="color:var(--red)">✕</div><div class="fm">${e.code}</div><div class="fv" style="color:var(--t2)">${e.date||''}</div></div>`
-    ).join('');
+    fatHtml = lat.fatal_errors.map(e => {
+      const info = lookupError(e.code, e.param||'0000');
+      return `<div class="fl" style="flex-direction:column;align-items:flex-start;gap:3px;padding:8px 0">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="color:var(--red);font-weight:700;font-family:var(--mono)">${e.code}</div>
+          <div style="font-size:10px;color:var(--t2)">${e.date||''}</div>
+        </div>
+        ${info ? `
+          <div style="color:var(--t1);font-size:11px">${info.msg}</div>
+          <div style="color:var(--amb);font-size:10px">→ ${info.action}</div>
+        ` : `<div style="color:var(--t2);font-size:11px">Unknown error code</div>`}
+      </div>`;
+    }).join('');
   }
 
   // A and B axis angle chips for latest report
