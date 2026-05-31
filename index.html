@@ -1075,21 +1075,53 @@ function viewDice() {
       <div class="dg">${pos.map(p=>`<div class="dc" id="dc-${prefix}${p}"><label>${prefix.toUpperCase()}${p}</label><input type="number" id="d${prefix}${p}" step="0.001" placeholder="—" oninput="onDiceInput(this,'${prefix}',${p})"></div>`).join('')}</div>
     </div>`;
 
+  const runs = [...S.dic].reverse();
+  const histHtml = runs.length ? runs.map((r,i) => {
+    const vc = r.verdict==='pass'?'bg':r.verdict==='warn'?'ba':'br';
+    const ec = r.verdict==='pass'?'g':r.verdict==='warn'?'a':'r';
+    const date = (r.created_at||r.run_date||'').split('T')[0];
+    return `<div class="ce ${ec}" style="margin-bottom:8px">
+      <div class="ce-hdr">
+        <div class="ce-id">Run ${runs.length - i} — ${date}</div>
+        <span class="badge ${vc}">${(r.verdict||'?').toUpperCase()}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;font-size:11px;margin-bottom:6px">
+        <div><div style="color:var(--t2);font-size:9px">H DEV</div>${r.avg_h_dev?.toFixed(3)??'—'} mm</div>
+        <div><div style="color:var(--t2);font-size:9px">MAX TAPER</div>${r.max_taper?.toFixed(3)??'—'} mm</div>
+        <div><div style="color:var(--t2);font-size:9px">H1-H9</div>${[r.h1,r.h3,r.h6,r.h9].filter(v=>v!=null).map(v=>v.toFixed(2)).join(' / ')||'—'}</div>
+        <div><div style="color:var(--t2);font-size:9px">TAPER 1-9</div>${[r.tw1&&r.bw1?+(r.tw1-r.bw1).toFixed(3):null,r.tw9&&r.bw9?+(r.tw9-r.bw9).toFixed(3):null].filter(v=>v!=null).join(' / ')||'—'}</div>
+      </div>
+    </div>`;
+  }).join('') : '<div style="color:var(--t2);font-size:11px">No runs yet — enter measurements and save.</div>';
+
   return `
-    <div class="sh"><div class="st">Dice Measurement Tool — ${S.serial}</div></div>
-    <div class="p">
-      <div class="ph"><span class="pt">Enter Measurements</span></div>
-      <div class="pb">
-        ${mkInputs('h','Height (mm)')}
-        ${mkInputs('tw','Top Width (mm)')}
-        ${mkInputs('bw','Bottom Width (mm)')}
-        <div style="display:flex;gap:8px;margin-top:4px">
-          <button class="btn btn-g" onclick="analyzeDice()">▶ Analyze</button>
-          <button class="btn btn-o" onclick="clearDice()">✕ Clear</button>
+    <div class="sh"><div class="st">Dice Tool — ${S.serial}</div></div>
+    <div class="g2">
+      <div class="p">
+        <div class="ph"><span class="pt">Enter Measurements</span></div>
+        <div class="pb">
+          ${mkInputs('h','Height (mm)')}
+          ${mkInputs('tw','Top Width (mm)')}
+          ${mkInputs('bw','Bottom Width (mm)')}
+          <div style="display:flex;gap:8px;margin-top:4px">
+            <button class="btn btn-g" onclick="analyzeDice()">▶ Analyze</button>
+            <button class="btn btn-b" onclick="saveDice()">↑ Save Run</button>
+            <button class="btn btn-o" onclick="clearDice()">✕ Clear</button>
+          </div>
+          <div id="dice-result"></div>
         </div>
-        <div id="dice-result"></div>
+      </div>
+
+      <div class="p">
+        <div class="ph"><span class="pt">Run History (${S.dic.length})</span></div>
+        <div class="pb" style="max-height:560px;overflow-y:auto">${histHtml}</div>
       </div>
     </div>
+    ${S.dic.length>1?`
+    <div class="g2">
+      <div class="p"><div class="ph"><span class="pt">Height Deviation Over Runs</span></div><div class="pb"><div class="cw" data-chart="dic-hdev"></div></div></div>
+      <div class="p"><div class="ph"><span class="pt">Max Taper Over Runs</span></div><div class="pb"><div class="cw" data-chart="dic-tap"></div></div></div>
+    </div>`:''}
   `;
 }
 
@@ -1233,25 +1265,22 @@ async function submitCorrLog() {
 }
 
 async function saveDice() {
+  if (!S.serial) return alert('Select a machine first');
   const m = getDice();
   const res = diagnose(m);
   const row = {
-    serial_number:     S.serial,
-    correction_number: parseInt(document.getElementById('dCN')?.value)||null,
-    run_date:          document.getElementById('dRD')?.value||null,
+    serial_number: S.serial,
     h1: m.h1, h3: m.h3, h6: m.h6, h9: m.h9,
     tw1: m.tw1, tw3: m.tw3, tw6: m.tw6, tw9: m.tw9,
     bw1: m.bw1, bw3: m.bw3, bw6: m.bw6, bw9: m.bw9,
     avg_h_dev:  res.hDev,
     max_taper:  res.maxTaper,
     verdict:    res.verdict,
-    notes:      document.getElementById('dNotes')?.value||null,
   };
   loading(true);
   try {
-    console.log('Saving dice row:', JSON.stringify(row));
     await dbInsert('dice_runs', row);
-    toast('✓ Dice run saved','ok');
+    toast('✓ Run saved','ok');
     await selectMachine(S.serial);
   } catch(e) {
     toast('Save failed: '+e.message,'er');
