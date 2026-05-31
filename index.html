@@ -1089,10 +1089,10 @@ function viewSys() {
 
   const counts = [3,5,10,20];
   const selectorHtml = `
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;position:sticky;top:0;background:var(--bg);padding:10px 0;z-index:10;border-bottom:1px solid var(--b)">
       <span style="font-size:11px;color:var(--t2)">Show:</span>
-      ${counts.map(n => `<button onclick="setSysCount(${n})" class="btn btn-o btn-sm${sel===n?' active-filter':''}" style="${sel===n?'border-color:var(--grn);color:var(--grn)':''}">${n} latest</button>`).join('')}
-      <button onclick="setSysCount(0)" class="btn btn-o btn-sm${sel===0?' active-filter':''}" style="${sel===0?'border-color:var(--grn);color:var(--grn)':''}">All (${allSys.length})</button>
+      ${counts.map(n => `<button onclick="setSysCount(${n})" class="btn btn-o btn-sm" style="${sel===n?'border-color:var(--grn);color:var(--grn)':''}">${n} latest</button>`).join('')}
+      <button onclick="setSysCount(0)" class="btn btn-o btn-sm" style="${sel===0?'border-color:var(--grn);color:var(--grn)':''}">All (${allSys.length})</button>
     </div>`;
 
   return `
