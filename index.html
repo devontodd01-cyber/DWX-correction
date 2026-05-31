@@ -895,6 +895,15 @@ function viewOverview() {
       <div class="p"><div class="ph"><span class="pt">Health Flags</span></div><div class="pb">${flagHtml}</div></div>
       <div class="p"><div class="ph"><span class="pt">Latest System Report</span><span style="font-size:10px;color:var(--t2)">${(lat.report_date||'').split(' ')[0]}</span></div><div class="pb">${snapHtml}</div></div>
     </div>
+    ${S.sys.length>1?`
+    <div class="g2">
+      <div class="p"><div class="ph"><span class="pt">Spindle Gradient X & Y</span></div><div class="pb"><div class="cw" data-chart="sys-grad"></div></div></div>
+      <div class="p"><div class="ph"><span class="pt">Origin X / Y / Z Drift</span></div><div class="pb"><div class="cw" data-chart="sys-oxyz"></div></div></div>
+    </div>
+    <div class="g2">
+      <div class="p"><div class="ph"><span class="pt">A-Axis Spread</span></div><div class="pb"><div class="cw" data-chart="sys-aspread"></div></div></div>
+      <div class="p"><div class="ph"><span class="pt">B-Axis Spread</span></div><div class="pb"><div class="cw" data-chart="sys-bspread"></div></div></div>
+    </div>`:''}
   `;
 }
 
