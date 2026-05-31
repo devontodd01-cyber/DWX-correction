@@ -1097,7 +1097,11 @@ function viewSys() {
 
   return `
     <div class="sh"><div class="st">System Reports — ${S.serial} (${filtered.length}${filtered.length<allSys.length?' of '+allSys.length:''})</div></div>
-    ${selectorHtml}
+    <div style="display:flex;align-items:center;gap:8px;padding:10px 0 14px;border-bottom:1px solid var(--b);margin-bottom:14px">
+      <span style="font-size:11px;color:var(--t2)">Show:</span>
+      ${counts.map(n => `<button onclick="setSysCount(${n})" class="btn btn-o btn-sm" style="${sel===n?'border-color:var(--grn);color:var(--grn);font-weight:700':''}">${n} latest</button>`).join('')}
+      <button onclick="setSysCount(0)" class="btn btn-o btn-sm" style="${sel===0?'border-color:var(--grn);color:var(--grn);font-weight:700':''}">All (${allSys.length})</button>
+    </div>
 
     ${compHtml}
 
