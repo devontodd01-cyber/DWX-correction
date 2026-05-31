@@ -914,6 +914,7 @@ function sc(icon, val, lbl) {
 function viewSys() {
   if (!S.sys.length) return nodata('No system reports for this machine. Drop a VPanel ZIP to load one.');
   const lat = S.sys[S.sys.length-1];
+  const prev = S.sys.length > 1 ? S.sys[S.sys.length-2] : null;
 
   const fields = [
     ['Model', lat.model], ['VPanel', lat.vpanel_ver], ['Firmware', lat.firmware_ver],
@@ -925,6 +926,91 @@ function viewSys() {
 
   const infoHtml = fields.map(([k,v]) => `<div class="ir"><span class="ik">${k}</span><span class="iv">${v}</span></div>`).join('');
 
+  // ── COMPARISON PANEL ──────────────────────────────────
+  let compHtml = '';
+  if (prev) {
+    const delta = (a, b, decimals=3) => {
+      if (a==null||b==null) return null;
+      return +(a - b).toFixed(decimals);
+    };
+    const arrow = d => d > 0 ? '▲' : d < 0 ? '▼' : '●';
+    const deltaColor = (d, warnAt, errAt, lowerIsBetter=false) => {
+      if (d==null) return 'var(--t2)';
+      const abs = Math.abs(d);
+      if (abs === 0) return 'var(--t2)';
+      const bad = lowerIsBetter ? d < 0 : d > 0;
+      if (errAt!=null && abs >= errAt) return bad ? 'var(--red)' : 'var(--grn)';
+      if (warnAt!=null && abs >= warnAt) return bad ? 'var(--amb)' : 'var(--grn)';
+      return 'var(--grn)';
+    };
+
+    const compRow = (label, latVal, prevVal, decimals=3, warnAt=null, errAt=null, lowerIsBetter=false) => {
+      if (latVal==null && prevVal==null) return '';
+      const d = delta(latVal, prevVal, decimals);
+      const col = deltaColor(d, warnAt, errAt, lowerIsBetter);
+      const dStr = d!=null ? `${d>0?'+':''}${d}` : '—';
+      return `<tr>
+        <td style="color:var(--t2);padding:6px 10px;width:140px">${label}</td>
+        <td style="padding:6px 10px;color:var(--t1)">${prevVal??'—'}</td>
+        <td style="padding:6px 10px;color:var(--t1)">${latVal??'—'}</td>
+        <td style="padding:6px 10px;color:${col};font-weight:700">${d!=null?arrow(d):''} ${dStr}</td>
+      </tr>`;
+    };
+
+    // A-axis offset comparison
+    let aArr=[],aPrevArr=[];
+    try{aArr=Array.isArray(lat.a_ang_base)?lat.a_ang_base:JSON.parse(lat.a_ang_base||'[]');}catch(e){}
+    try{aPrevArr=Array.isArray(prev.a_ang_base)?prev.a_ang_base:JSON.parse(prev.a_ang_base||'[]');}catch(e){}
+    let bArr=[],bPrevArr=[];
+    try{bArr=Array.isArray(lat.b_ang_base)?lat.b_ang_base:JSON.parse(lat.b_ang_base||'[]');}catch(e){}
+    try{bPrevArr=Array.isArray(prev.b_ang_base)?prev.b_ang_base:JSON.parse(prev.b_ang_base||'[]');}catch(e){}
+
+    const axisCompHtml = (label, curr, prev, color) => {
+      if (!curr.length) return '';
+      return `<div style="margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;color:${color};margin-bottom:6px">${label}</div>
+        <div style="display:flex;gap:3px;flex-wrap:wrap">
+          ${curr.map((v,i) => {
+            const p = prev[i];
+            const d = p!=null ? v-p : null;
+            const cls = d==null?'':Math.abs(d)>10?'lo':Math.abs(d)>5?'hi':'';
+            const dStr = d!=null ? ` <span style="font-size:9px;color:${Math.abs(d)>10?'var(--red)':Math.abs(d)>5?'var(--amb)':'var(--grn)'}">${d>0?'+':''}${d}</span>` : '';
+            return `<div class="och ${cls}" style="padding:3px 7px;font-size:10px">P${i} ${v}${dStr}</div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    };
+
+    compHtml = `
+    <div class="p">
+      <div class="ph">
+        <span class="pt">Report Comparison</span>
+        <span style="font-size:10px;color:var(--t2)">${(prev.report_date||'').split(' ')[0]} → ${(lat.report_date||'').split(' ')[0]}</span>
+      </div>
+      <div class="pb">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:16px">
+          <thead><tr>
+            <th style="padding:6px 10px;text-align:left;color:var(--t2);font-size:9px;letter-spacing:.08em;border-bottom:1px solid var(--b2)">FIELD</th>
+            <th style="padding:6px 10px;text-align:left;color:var(--t2);font-size:9px;letter-spacing:.08em;border-bottom:1px solid var(--b2)">PREVIOUS</th>
+            <th style="padding:6px 10px;text-align:left;color:var(--t2);font-size:9px;letter-spacing:.08em;border-bottom:1px solid var(--b2)">LATEST</th>
+            <th style="padding:6px 10px;text-align:left;color:var(--t2);font-size:9px;letter-spacing:.08em;border-bottom:1px solid var(--b2)">CHANGE</th>
+          </tr></thead>
+          <tbody>
+            ${compRow('Correction #', lat.correction_count, prev.correction_count, 0)}
+            ${compRow('Grad X', lat.grad_x, prev.grad_x, 6, 0.0005, 0.001)}
+            ${compRow('Grad Y', lat.grad_y, prev.grad_y, 6, 0.0005, 0.001)}
+            ${compRow('Origin X', lat.origin_x, prev.origin_x, 0, 5, 15)}
+            ${compRow('Origin Y', lat.origin_y, prev.origin_y, 0, 5, 15)}
+            ${compRow('Origin Z', lat.origin_z, prev.origin_z, 0, 5, 15)}
+            ${compRow('A Spread', lat.a_spread, prev.a_spread, 0, 20, 50)}
+            ${compRow('B Spread', lat.b_spread, prev.b_spread, 0, 20, 50)}
+          </tbody>
+        </table>
+        ${axisCompHtml('A-Axis Offset Changes', aArr, aPrevArr, 'var(--blu)')}
+        ${axisCompHtml('B-Axis Offset Changes', bArr, bPrevArr, 'var(--pur)')}
+      </div>
+    </div>`;
+  }
   let fatHtml = '<div style="color:var(--grn);font-size:11px">✓ No fatal errors</div>';
   if (lat.fatal_errors && lat.fatal_errors.length) {
     fatHtml = lat.fatal_errors.map(e => {
@@ -991,6 +1077,8 @@ function viewSys() {
       <div class="p"><div class="ph"><span class="pt">Latest Snapshot</span><span style="font-size:10px;color:var(--t2)">${(lat.report_date||'').split(' ')[0]}</span></div><div class="pb">${infoHtml}</div></div>
       <div class="p"><div class="ph"><span class="pt">Fatal Errors</span></div><div class="pb">${fatHtml}</div></div>
     </div>
+
+    ${compHtml}
 
     <div class="p">
       <div class="ph"><span class="pt">A & B Axis Angle Offsets — Latest Report</span></div>
