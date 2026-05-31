@@ -911,10 +911,23 @@ function sc(icon, val, lbl) {
   return `<div class="sc"><div class="sc-icon">${icon}</div><div><div class="sc-val">${val}</div><div class="sc-lbl">${lbl}</div></div></div>`;
 }
 
+function setSysCount(n) {
+  S._sysCount = n;
+  let el = document.getElementById('sysCount');
+  if (!el) { el = document.createElement('input'); el.id='sysCount'; el.type='hidden'; document.body.appendChild(el); }
+  el.value = n;
+  renderView();
+}
+
 function viewSys() {
   if (!S.sys.length) return nodata('No system reports for this machine. Drop a VPanel ZIP to load one.');
-  const lat = S.sys[S.sys.length-1];
-  const prev = S.sys.length > 1 ? S.sys[S.sys.length-2] : null;
+
+  // Filter based on selected count
+  const sel = parseInt(document.getElementById('sysCount')?.value||'0')||0;
+  const allSys = S.sys;
+  const filtered = sel > 0 ? allSys.slice(-sel) : allSys;
+  const lat = filtered[filtered.length-1];
+  const prev = filtered.length > 1 ? filtered[filtered.length-2] : null;
 
   const fields = [
     ['Model', lat.model], ['VPanel', lat.vpanel_ver], ['Firmware', lat.firmware_ver],
@@ -1056,7 +1069,7 @@ function viewSys() {
     mkAxisChips(bArr, 'B-Axis Angle Offsets (Base)', 'var(--pur)') :
     '<div style="color:var(--t2);font-size:11px">Drop more ZIPs to see angle data</div>';
 
-  const tblRows = [...S.sys].reverse().map(l => {
+  const tblRows = [...filtered].reverse().map(l => {
     const gx = l.grad_x != null ? Math.abs(l.grad_x) : null;
     const gy = l.grad_y != null ? Math.abs(l.grad_y) : null;
     const gxc = gx==null?'':gx>0.0015?'er':gx>0.001?'wa':'ok';
@@ -1071,8 +1084,20 @@ function viewSys() {
     </tr>`;
   }).join('');
 
+  // Store filtered for charts to use
+  S._sysFilt = filtered;
+
+  const counts = [3,5,10,20];
+  const selectorHtml = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+      <span style="font-size:11px;color:var(--t2)">Show:</span>
+      ${counts.map(n => `<button onclick="setSysCount(${n})" class="btn btn-o btn-sm${sel===n?' active-filter':''}" style="${sel===n?'border-color:var(--grn);color:var(--grn)':''}">${n} latest</button>`).join('')}
+      <button onclick="setSysCount(0)" class="btn btn-o btn-sm${sel===0?' active-filter':''}" style="${sel===0?'border-color:var(--grn);color:var(--grn)':''}">All (${allSys.length})</button>
+    </div>`;
+
   return `
-    <div class="sh"><div class="st">System Reports — ${S.serial} (${S.sys.length})</div></div>
+    <div class="sh"><div class="st">System Reports — ${S.serial} (${filtered.length}${filtered.length<allSys.length?' of '+allSys.length:''})</div></div>
+    ${selectorHtml}
 
     ${compHtml}
 
@@ -1462,7 +1487,7 @@ function drawCharts() {
 }
 
 function makeChart(id, ctx) {
-  const SL = S.sys;
+  const SL = S._sysFilt || S.sys;
   const CL = S.cor;
   const DL = S.dic;
   const slbl = SL.map(l => (l.report_date||l.created_at||'').split('T')[0].slice(5)||`#${l.correction_count}`);
