@@ -883,11 +883,7 @@ function viewSys() {
     ${S.sys.length>1?`
     <div class="g2">
       <div class="p"><div class="ph"><span class="pt">Spindle Gradient X & Y</span></div><div class="pb"><div class="cw" data-chart="sys-grad"></div></div></div>
-      <div class="p"><div class="ph"><span class="pt">Origin Z Shift</span></div><div class="pb"><div class="cw" data-chart="sys-oz"></div></div></div>
-    </div>
-    <div class="g2">
-      <div class="p"><div class="ph"><span class="pt">Origin X Shift</span></div><div class="pb"><div class="cw" data-chart="sys-ox"></div></div></div>
-      <div class="p"><div class="ph"><span class="pt">Origin Y Shift</span></div><div class="pb"><div class="cw" data-chart="sys-oy"></div></div></div>
+      <div class="p"><div class="ph"><span class="pt">Origin X / Y / Z Shift</span></div><div class="pb"><div class="cw" data-chart="sys-oxyz"></div></div></div>
     </div>
     <div class="g2">
       <div class="p"><div class="ph"><span class="pt">A-Axis Spread Over Time</span></div><div class="pb"><div class="cw" data-chart="sys-aspread"></div></div></div>
@@ -1186,6 +1182,12 @@ function makeChart(id, ctx) {
     }
     case 'sys-grad':
       return new Chart(ctx,{type:'line',data:{labels:slbl,datasets:[DS('Grad X',SL.map(l=>l.grad_x),'#4f8ef7'),DS('Grad Y',SL.map(l=>l.grad_y),'#1ab8d4',true)]},options:CD});
+    case 'sys-oxyz':
+      return new Chart(ctx,{type:'line',data:{labels:slbl,datasets:[
+        DS('Origin X',SL.map(l=>l.origin_x),'#4f8ef7'),
+        DS('Origin Y',SL.map(l=>l.origin_y),'#1ab8d4',true),
+        DS('Origin Z',SL.map(l=>l.origin_z),'#9f7afa',false),
+      ]},options:CD});
     case 'sys-oz':
       return new Chart(ctx,{type:'line',data:{labels:slbl,datasets:[DS('Origin Z',SL.map(l=>l.origin_z),'#9f7afa')]},options:CD});
     case 'sys-ox':
