@@ -1183,7 +1183,6 @@ function makeChart(id, ctx) {
     case 'sys-grad':
       return new Chart(ctx,{type:'line',data:{labels:slbl,datasets:[DS('Grad X',SL.map(l=>l.grad_x),'#4f8ef7'),DS('Grad Y',SL.map(l=>l.grad_y),'#1ab8d4',true)]},options:CD});
     case 'sys-oxyz': {
-      // Calculate drift relative to first reading
       const base = SL[0];
       const driftX = SL.map(l => l.origin_x != null && base.origin_x != null ? l.origin_x - base.origin_x : null);
       const driftY = SL.map(l => l.origin_y != null && base.origin_y != null ? l.origin_y - base.origin_y : null);
@@ -1191,11 +1190,8 @@ function makeChart(id, ctx) {
       const opts = JSON.parse(JSON.stringify(CD));
       opts.scales.y = {
         ...CD.scales.y,
-        min: -10, max: 10,
-        ticks: { ...CD.scales.y.ticks, stepSize: 2 },
-        grid: { color: (ctx) => ctx.tick.value === 0 ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.04)' }
+        grid: { color: (ctx) => ctx.tick?.value === 0 ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.04)' }
       };
-      opts.plugins.annotation = {};
       return new Chart(ctx,{type:'line',data:{labels:slbl,datasets:[
         DS('X Drift',driftX,'#4f8ef7'),
         DS('Y Drift',driftY,'#1ab8d4',true),
