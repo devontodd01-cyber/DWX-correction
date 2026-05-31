@@ -900,9 +900,7 @@ function viewSys() {
 }
 
 function viewCorr() {
-  if (!S.cor.length) return nodata('No correction logs for this machine. Drop a VPanel ZIP containing a correction log.');
-
-  const entries = [...S.cor].reverse().map(c => {
+  const entries = S.cor.length ? [...S.cor].reverse().map(c => {
     const gap = c.gap_ap1p2z;
     const cls = gap==null?'':Math.abs(gap)>30?'r':Math.abs(gap)>15?'a':'g';
     let bArr=[]; try{bArr=Array.isArray(c.b_ang_base)?c.b_ang_base:(c.b_ang_base?JSON.parse(c.b_ang_base):[]);}catch(e){}
@@ -923,10 +921,24 @@ function viewCorr() {
       </div>
       ${bArr.length?`<div style="font-size:9px;color:var(--t2);margin-bottom:4px">B-AXIS OFFSETS</div><div class="oc">${bchips}</div>`:''}
     </div>`;
-  }).join('');
+  }).join('') : '<div style="color:var(--t2);font-size:11px">No correction logs yet — paste one below.</div>';
 
   return `
     <div class="sh"><div class="st">Correction Logs — ${S.serial} (${S.cor.length})</div></div>
+
+    <!-- PASTE WINDOW -->
+    <div class="p">
+      <div class="ph"><span class="pt">Paste Correction Log</span></div>
+      <div class="pb">
+        <textarea class="ti" id="corrPaste" style="min-height:120px;font-size:11px" placeholder="Paste VPanel correction log text here…"></textarea>
+        <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+          <button class="btn btn-g" onclick="submitCorrLog()">↑ Parse & Save</button>
+          <button class="btn btn-o" onclick="document.getElementById('corrPaste').value=''">✕ Clear</button>
+          <div id="corr-paste-status" style="font-size:11px;color:var(--t2)"></div>
+        </div>
+      </div>
+    </div>
+
     ${S.cor.length>1?`
     <div class="g2">
       <div class="p"><div class="ph"><span class="pt">GapAP1P2Z</span></div><div class="pb"><div class="cw" data-chart="cor-gap"></div></div></div>
@@ -1107,8 +1119,36 @@ function clearDice() {
   if (dr) dr.innerHTML='';
 }
 
+async function submitCorrLog() {
+  const text = document.getElementById('corrPaste')?.value?.trim();
+  const status = document.getElementById('corr-paste-status');
+  if (!text) { status.textContent = 'Nothing to parse'; return; }
+  if (!S.serial) { status.textContent = 'Select a machine first'; return; }
+
+  const parsed = parseCorrLog(text);
+  if (!parsed || (parsed.gap_ap1p2z == null && parsed.corr_count == null && !parsed.b_ang_base)) {
+    status.style.color = 'var(--red)';
+    status.textContent = '⚠ Could not parse — is this a VPanel correction log?';
+    return;
+  }
+
+  // Force serial to selected machine
+  parsed.serial = S.serial;
+
+  loading(true);
+  try {
+    await saveCorrLog(parsed);
+    status.style.color = 'var(--grn)';
+    status.textContent = `✓ Saved — Corr#${parsed.corr_count||'?'}, Gap=${parsed.gap_ap1p2z??'?'}`;
+    document.getElementById('corrPaste').value = '';
+    await selectMachine(S.serial);
+  } catch(e) {
+    status.style.color = 'var(--red)';
+    status.textContent = '✕ Save failed: ' + e.message;
+  } finally { loading(false); }
+}
+
 async function saveDice() {
-  if (!S.serial) return alert('Select a machine first');
   const m = getDice();
   const res = diagnose(m);
   const row = {
