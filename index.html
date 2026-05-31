@@ -521,8 +521,18 @@ async function handleFiles(files) {
     setStatus('Reading '+f.name+'…','info');
     try {
       if (name.endsWith('.zip')) await handleZip(f);
-      else if (name.endsWith('.txt') || name.endsWith('.log')) {
-        const text = await f.text();
+      if (name.endsWith('.txt') || name.endsWith('.log')) {
+        // Read as array buffer first to detect UTF-16
+        const buf = await f.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        let text;
+        // Check for UTF-16 BOM (FF FE = little-endian, FE FF = big-endian)
+        if ((bytes[0] === 0xFF && bytes[1] === 0xFE) || (bytes[0] === 0xFE && bytes[1] === 0xFF)) {
+          const enc = bytes[0] === 0xFF ? 'utf-16le' : 'utf-16be';
+          text = new TextDecoder(enc).decode(buf);
+        } else {
+          text = new TextDecoder('utf-8').decode(buf);
+        }
         await handleText(text, f.name);
       }
     } catch(e) { toast('File error: '+e.message,'er'); setStatus('Error','err'); }
