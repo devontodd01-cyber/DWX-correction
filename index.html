@@ -1070,59 +1070,26 @@ function viewCorr() {
 function viewDice() {
   const pos = [1,3,6,9];
   const mkInputs = (prefix, label) => `
-    <div style="margin-bottom:10px">
-      <div style="font-size:9px;color:var(--t2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px">${label}</div>
+    <div style="margin-bottom:12px">
+      <div style="font-size:9px;color:var(--t2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">${label}</div>
       <div class="dg">${pos.map(p=>`<div class="dc" id="dc-${prefix}${p}"><label>${prefix.toUpperCase()}${p}</label><input type="number" id="d${prefix}${p}" step="0.001" placeholder="—" oninput="onDiceInput(this,'${prefix}',${p})"></div>`).join('')}</div>
     </div>`;
 
-  const runs = [...S.dic].reverse();
-  const histHtml = runs.length ? runs.map(r => {
-    const vc = r.verdict==='pass'?'bg':r.verdict==='warn'?'ba':'br';
-    return `<div class="ce ${r.verdict==='pass'?'g':r.verdict==='warn'?'a':'r'}" style="margin-bottom:8px">
-      <div class="ce-hdr">
-        <div class="ce-id">#${r.corr_count||'?'} — ${r.run_date||'?'}</div>
-        <span class="badge ${vc}">${(r.verdict||'?').toUpperCase()}</span>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:11px">
-        <div><span style="color:var(--t2)">H Dev: </span>${r.avg_h_dev?.toFixed(3)??'—'} mm</div>
-        <div><span style="color:var(--t2)">Taper: </span>${r.max_taper?.toFixed(3)??'—'} mm</div>
-      </div>
-      ${r.notes?`<div style="font-size:10px;color:var(--t2);margin-top:6px">${r.notes}</div>`:''}
-    </div>`;
-  }).join('') : '<div style="color:var(--t2);font-size:11px">No dice runs yet</div>';
-
   return `
-    <div class="sh"><div class="st">Dice Measurements — ${S.serial}</div></div>
-    <div class="g2">
-      <div class="p"><div class="ph"><span class="pt">New Measurement</span></div><div class="pb">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-          <div><div style="font-size:9px;color:var(--t2);margin-bottom:4px">CORRECTION #</div><input class="ti" type="number" id="dCN" placeholder="52"></div>
-          <div><div style="font-size:9px;color:var(--t2);margin-bottom:4px">DATE</div><input class="ti" type="date" id="dRD"></div>
-        </div>
+    <div class="sh"><div class="st">Dice Measurement Tool — ${S.serial}</div></div>
+    <div class="p">
+      <div class="ph"><span class="pt">Enter Measurements</span></div>
+      <div class="pb">
         ${mkInputs('h','Height (mm)')}
         ${mkInputs('tw','Top Width (mm)')}
         ${mkInputs('bw','Bottom Width (mm)')}
-        <div style="margin-bottom:10px">
-          <div style="font-size:9px;color:var(--t2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px">Notes</div>
-          <input class="ti" type="text" id="dNotes" placeholder="Optional notes…">
-        </div>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:8px;margin-top:4px">
           <button class="btn btn-g" onclick="analyzeDice()">▶ Analyze</button>
-          <button class="btn btn-b" onclick="saveDice()">↑ Save to DB</button>
           <button class="btn btn-o" onclick="clearDice()">✕ Clear</button>
         </div>
         <div id="dice-result"></div>
-      </div></div>
-
-      <div class="p"><div class="ph"><span class="pt">Run History (${S.dic.length})</span></div>
-        <div class="pb" style="max-height:560px;overflow-y:auto">${histHtml}</div>
       </div>
     </div>
-    ${S.dic.length>1?`
-    <div class="g2">
-      <div class="p"><div class="ph"><span class="pt">Height Dev Over Runs</span></div><div class="pb"><div class="cw" data-chart="dic-hdev"></div></div></div>
-      <div class="p"><div class="ph"><span class="pt">Max Taper Over Runs</span></div><div class="pb"><div class="cw" data-chart="dic-tap"></div></div></div>
-    </div>`:''}
   `;
 }
 
@@ -1269,10 +1236,12 @@ async function saveDice() {
   const m = getDice();
   const res = diagnose(m);
   const row = {
-    serial: S.serial,
-    corr_count: parseInt(document.getElementById('dCN')?.value)||null,
-    run_date:   document.getElementById('dRD')?.value||null,
-    ...m,
+    serial_number:     S.serial,
+    correction_number: parseInt(document.getElementById('dCN')?.value)||null,
+    run_date:          document.getElementById('dRD')?.value||null,
+    h1: m.h1, h3: m.h3, h6: m.h6, h9: m.h9,
+    tw1: m.tw1, tw3: m.tw3, tw6: m.tw6, tw9: m.tw9,
+    bw1: m.bw1, bw3: m.bw3, bw6: m.bw6, bw9: m.bw9,
     avg_h_dev:  res.hDev,
     max_taper:  res.maxTaper,
     verdict:    res.verdict,
@@ -1280,10 +1249,14 @@ async function saveDice() {
   };
   loading(true);
   try {
+    console.log('Saving dice row:', JSON.stringify(row));
     await dbInsert('dice_runs', row);
     toast('✓ Dice run saved','ok');
     await selectMachine(S.serial);
-  } catch(e) { toast('Save failed: '+e.message,'er'); }
+  } catch(e) {
+    toast('Save failed: '+e.message,'er');
+    console.error('Dice save error:', e.message);
+  }
   finally { loading(false); }
 }
 
