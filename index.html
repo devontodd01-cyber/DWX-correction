@@ -626,9 +626,15 @@ async function handleText(text, name) {
 function parseSysReport(text) {
   // Must have SerialNumber to be a system report
   const serialM = text.match(/^SerialNumber:\s*(\S+)/im);
-  if (!serialM) return null;
+  if (!serialM) {
+    console.log('parseSysReport: no SerialNumber found');
+    return null;
+  }
   const serial = serialM[1].trim();
-  if (!/^[A-Z]{3}\d{3,4}$/i.test(serial)) return null;
+  if (!/^[A-Z]{2,4}\d{3,6}$/i.test(serial)) {
+    console.log('parseSysReport: serial failed validation:', serial);
+    return null;
+  }
 
   const gl = (key) => { const m = text.match(new RegExp('^\\s*' + key + ':\\s*(.+)$','im')); return m ? m[1].trim() : null; };
 
@@ -807,7 +813,7 @@ function viewOverview() {
   const flags = [];
   const addFlag = (lvl, msg, val) => flags.push({lvl, msg, val});
 
-  const gap = latc.gap_ap1p2z;
+  const gap = latc.gap_ap1p2z ?? lat.gap_ap1p2z;
   if (gap != null) {
     if (Math.abs(gap) > 30) addFlag('r','GapAP1P2Z critical',gap);
     else if (Math.abs(gap) > 15) addFlag('a','GapAP1P2Z elevated',gap);
@@ -822,7 +828,7 @@ function viewOverview() {
     else addFlag('g','Spindle gradient Y nominal', gy.toFixed(6));
   }
 
-  const bs = latc.b_spread;
+  const bs = latc.b_spread ?? lat.b_spread;
   if (bs != null) {
     if (bs > 200) addFlag('r','B-axis spread critical', bs);
     else if (bs > 150) addFlag('a','B-axis spread elevated', bs);
@@ -841,22 +847,25 @@ function viewOverview() {
       <div class="fv" style="color:var(--${f.lvl==='g'?'grn':f.lvl==='a'?'amb':'red'})">${f.val}</div>
     </div>`).join('') : '<div style="color:var(--t2);font-size:11px">No data yet — load a ZIP to see health flags</div>';
 
-  // tools
-  let toolHtml = '<div style="color:var(--t2);font-size:11px">No tool data</div>';
-  if (lat.tools && lat.tools.length) {
-    toolHtml = lat.tools.slice(0,8).map(t => {
-      const used = parseFloat(t.used)||0, life = parseFloat(t.life)||40;
-      const pct = Math.min(100,(used/life)*100);
-      const cls = pct>85?'er':pct>65?'wa':'';
-      return `<div style="margin-bottom:6px">
-        <div style="display:flex;justify-content:space-between;font-size:10px">
-          <span style="color:var(--t2)">#${t.slot} ${t.name}</span>
-          <span style="color:var(--${cls==='er'?'red':cls==='wa'?'amb':'t2'})">${t.used} / ${t.life}h</span>
-        </div>
-        <div class="tb-bar"><div class="tb-fill ${cls}" style="width:${pct}%"></div></div>
-      </div>`;
-    }).join('');
-  }
+  // system report snapshot
+  const fields = [
+    ['Model',        lat.model],
+    ['VPanel',       lat.vpanel_ver],
+    ['Firmware',     lat.firmware_ver],
+    ['Correction #', lat.correction_count],
+    ['Report Date',  lat.report_date],
+    ['Work Time',    lat.machine_work_time],
+    ['Spindle Time', lat.spindle_unit_time],
+    ['Grad X',       lat.grad_x?.toFixed(6)],
+    ['Grad Y',       lat.grad_y?.toFixed(6)],
+    ['Origin X',     lat.origin_x],
+    ['Origin Y',     lat.origin_y],
+    ['Origin Z',     lat.origin_z],
+  ].filter(([,v]) => v != null);
+
+  const snapHtml = fields.length
+    ? fields.map(([k,v]) => `<div class="ir"><span class="ik">${k}</span><span class="iv">${v}</span></div>`).join('')
+    : '<div style="color:var(--t2);font-size:11px">Drop a ZIP to load system report</div>';
 
   return `
     <div class="sh"><div class="st">Overview — ${S.serial}</div></div>
@@ -864,14 +873,12 @@ function viewOverview() {
       ${sc('⏱', lat.machine_work_time||'—', 'Work Hours')}
       ${sc('🔩', lat.spindle_unit_time||'—', 'Spindle Hours')}
       ${sc('📐', lat.correction_count||latc.corr_count||'—', 'Calibration #')}
-      ${sc('📅', S.sys.length ? (S.sys[S.sys.length-1].report_date||'').split(' ')[0] : '—', 'Last Report')}
+      ${sc('📅', S.sys.length ? (lat.report_date||'').split(' ')[0] : '—', 'Last Report')}
     </div>
     <div class="g2">
       <div class="p"><div class="ph"><span class="pt">Health Flags</span></div><div class="pb">${flagHtml}</div></div>
-      <div class="p"><div class="ph"><span class="pt">Tool Hours</span></div><div class="pb">${toolHtml}</div></div>
+      <div class="p"><div class="ph"><span class="pt">Latest System Report</span><span style="font-size:10px;color:var(--t2)">${(lat.report_date||'').split(' ')[0]}</span></div><div class="pb">${snapHtml}</div></div>
     </div>
-    ${S.cor.length>1?`<div class="p"><div class="ph"><span class="pt">GapAP1P2Z Trend</span></div><div class="pb"><div class="cw" data-chart="ov-gap"></div></div></div>`:''}
-    ${S.sys.length>1?`<div class="p"><div class="ph"><span class="pt">Spindle Gradient Trend</span></div><div class="pb"><div class="cw" data-chart="ov-grad"></div></div></div>`:''}
   `;
 }
 
