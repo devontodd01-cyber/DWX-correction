@@ -1080,17 +1080,24 @@ function viewDice() {
     const vc = r.verdict==='pass'?'bg':r.verdict==='warn'?'ba':'br';
     const ec = r.verdict==='pass'?'g':r.verdict==='warn'?'a':'r';
     const date = (r.created_at||r.run_date||'').split('T')[0];
+    const hVals = [r.h1,r.h3,r.h6,r.h9].map((v,i)=>`<div class="dc ${v!=null?'ok':''}"><label>H${[1,3,6,9][i]}</label><div style="font-size:12px;padding:4px 0">${v?.toFixed(3)??'—'}</div></div>`).join('');
+    const twVals = [r.tw1,r.tw3,r.tw6,r.tw9].map((v,i)=>`<div class="dc ${v!=null?'ok':''}"><label>TW${[1,3,6,9][i]}</label><div style="font-size:12px;padding:4px 0">${v?.toFixed(3)??'—'}</div></div>`).join('');
+    const bwVals = [r.bw1,r.bw3,r.bw6,r.bw9].map((v,i)=>`<div class="dc ${v!=null?'ok':''}"><label>BW${[1,3,6,9][i]}</label><div style="font-size:12px;padding:4px 0">${v?.toFixed(3)??'—'}</div></div>`).join('');
     return `<div class="ce ${ec}" style="margin-bottom:8px">
       <div class="ce-hdr">
-        <div class="ce-id">Run ${runs.length - i} — ${date}</div>
+        <div class="ce-id">Run ${runs.length - i} &nbsp;·&nbsp; ${date}</div>
         <span class="badge ${vc}">${(r.verdict||'?').toUpperCase()}</span>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;font-size:11px;margin-bottom:6px">
-        <div><div style="color:var(--t2);font-size:9px">H DEV</div>${r.avg_h_dev?.toFixed(3)??'—'} mm</div>
-        <div><div style="color:var(--t2);font-size:9px">MAX TAPER</div>${r.max_taper?.toFixed(3)??'—'} mm</div>
-        <div><div style="color:var(--t2);font-size:9px">H1-H9</div>${[r.h1,r.h3,r.h6,r.h9].filter(v=>v!=null).map(v=>v.toFixed(2)).join(' / ')||'—'}</div>
-        <div><div style="color:var(--t2);font-size:9px">TAPER 1-9</div>${[r.tw1&&r.bw1?+(r.tw1-r.bw1).toFixed(3):null,r.tw9&&r.bw9?+(r.tw9-r.bw9).toFixed(3):null].filter(v=>v!=null).join(' / ')||'—'}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:11px;margin-bottom:8px">
+        <div><span style="color:var(--t2)">H Dev: </span><strong>${r.avg_h_dev?.toFixed(3)??'—'} mm</strong></div>
+        <div><span style="color:var(--t2)">Max Taper: </span><strong>${r.max_taper?.toFixed(3)??'—'} mm</strong></div>
       </div>
+      <div style="font-size:9px;color:var(--t2);margin-bottom:4px">HEIGHT</div>
+      <div class="dg" style="margin-bottom:8px">${hVals}</div>
+      <div style="font-size:9px;color:var(--t2);margin-bottom:4px">TOP WIDTH</div>
+      <div class="dg" style="margin-bottom:8px">${twVals}</div>
+      <div style="font-size:9px;color:var(--t2);margin-bottom:4px">BOTTOM WIDTH</div>
+      <div class="dg">${bwVals}</div>
     </div>`;
   }).join('') : '<div style="color:var(--t2);font-size:11px">No runs yet — enter measurements and save.</div>';
 
@@ -1180,35 +1187,82 @@ function getDice() {
 
 function diagnose(m) {
   const flags = [];
-  const heights = [m.h1,m.h3,m.h6,m.h9].filter(v=>v!=null);
-  let avgH=null, hDev=null, maxTaper=null, verdict='pass';
+  const TOL = 0.05;
+  const H_TARGET = 13.00;
+  const W_TARGET = 7.00;
+  let verdict = 'pass';
 
-  if (heights.length >= 2) {
-    avgH  = heights.reduce((a,b)=>a+b,0)/heights.length;
-    hDev  = Math.max(...heights)-Math.min(...heights);
-    const allLow = heights.every(h => h < avgH - 0.08);
-    if (hDev > 0.10) { flags.push({l:'r',msg:'Height range critical',val:`Δ${hDev.toFixed(3)}mm`}); verdict='fail'; }
-    else if (hDev > 0.05) { flags.push({l:'a',msg:'Height variation elevated',val:`Δ${hDev.toFixed(3)}mm`}); verdict='warn'; }
-    else flags.push({l:'g',msg:'Height consistent',val:`Δ${hDev.toFixed(3)}mm`});
-    if (allLow) flags.push({l:'a',msg:'All heights uniformly low — possible Z origin drift',val:''});
+  const flag = (lvl, msg, val) => {
+    flags.push({l:lvl, msg, val});
+    if (lvl==='r') verdict='fail';
+    else if (lvl==='a' && verdict==='pass') verdict='warn';
+  };
+
+  // ── HEIGHT CHECK ──────────────────────────────────────
+  const heights = {H1:m.h1, H3:m.h3, H6:m.h6, H9:m.h9};
+  Object.entries(heights).forEach(([k,v]) => {
+    if (v == null) return;
+    const dev = v - H_TARGET;
+    if (Math.abs(dev) > TOL)
+      flag('r', `${k} out of tolerance`, `${v.toFixed(3)} (${dev>0?'+':''}${dev.toFixed(3)}mm)`);
+    else if (Math.abs(dev) > TOL*0.6)
+      flag('a', `${k} near limit`, `${v.toFixed(3)} (${dev>0?'+':''}${dev.toFixed(3)}mm)`);
+  });
+
+  const hVals = Object.values(heights).filter(v=>v!=null);
+  let hDev = null;
+  if (hVals.length >= 2) {
+    hDev = Math.max(...hVals) - Math.min(...hVals);
+    if (hDev <= TOL) flag('g', 'Height uniformity OK', `Δ${hDev.toFixed(3)}mm`);
   }
 
-  const tapers = [1,3,6,9].map(p => {
-    const tw=m[`tw${p}`], bw=m[`bw${p}`];
-    if (tw!=null&&bw!=null) return {p, t:tw-bw};
-    return null;
-  }).filter(Boolean);
+  // ── TOP WIDTH — BACKLASH ──────────────────────────────
+  // TW3 vs TW9 = Y axis backlash
+  if (m.tw3 != null && m.tw9 != null) {
+    const diff = Math.abs(m.tw3 - m.tw9);
+    if (diff > TOL) flag('r', 'Y-axis backlash (TW3 vs TW9)', `Δ${diff.toFixed(3)}mm`);
+    else if (diff > TOL*0.6) flag('a', 'Y-axis backlash elevated (TW3 vs TW9)', `Δ${diff.toFixed(3)}mm`);
+    else flag('g', 'Y-axis backlash OK (TW3 vs TW9)', `Δ${diff.toFixed(3)}mm`);
+  }
+  // TW1 vs TW6 = X axis backlash
+  if (m.tw1 != null && m.tw6 != null) {
+    const diff = Math.abs(m.tw1 - m.tw6);
+    if (diff > TOL) flag('r', 'X-axis backlash (TW1 vs TW6)', `Δ${diff.toFixed(3)}mm`);
+    else if (diff > TOL*0.6) flag('a', 'X-axis backlash elevated (TW1 vs TW6)', `Δ${diff.toFixed(3)}mm`);
+    else flag('g', 'X-axis backlash OK (TW1 vs TW6)', `Δ${diff.toFixed(3)}mm`);
+  }
+  // Overall TW uniformity
+  const twVals = [m.tw1,m.tw3,m.tw6,m.tw9].filter(v=>v!=null);
+  const twSpread = twVals.length>=2 ? Math.max(...twVals)-Math.min(...twVals) : null;
 
-  if (tapers.length) {
-    maxTaper = Math.max(...tapers.map(x=>Math.abs(x.t)));
-    tapers.forEach(({p,t}) => {
-      if (Math.abs(t)>0.08){flags.push({l:'r',msg:`Pos ${p} taper critical`,val:`${t.toFixed(3)}mm`});verdict='fail';}
-      else if (Math.abs(t)>0.04){flags.push({l:'a',msg:`Pos ${p} taper elevated`,val:`${t.toFixed(3)}mm`});if(verdict==='pass')verdict='warn';}
-    });
-    if (!flags.some(f=>f.msg.includes('taper'))) flags.push({l:'g',msg:'Taper within range',val:`max ${maxTaper.toFixed(3)}mm`});
+  // ── BOTTOM WIDTH — ALIGNMENT & OFFSET ────────────────
+  // BW1 vs BW6 = fixture alignment
+  if (m.bw1 != null && m.bw6 != null) {
+    const diff = Math.abs(m.bw1 - m.bw6);
+    if (diff > TOL) flag('r', 'Fixture alignment issue (BW1 vs BW6)', `Δ${diff.toFixed(3)}mm`);
+    else if (diff > TOL*0.6) flag('a', 'Fixture alignment near limit (BW1 vs BW6)', `Δ${diff.toFixed(3)}mm`);
+    else flag('g', 'Fixture alignment OK (BW1 vs BW6)', `Δ${diff.toFixed(3)}mm`);
+  }
+  // BW3 vs BW9 = Y axis offset
+  if (m.bw3 != null && m.bw9 != null) {
+    const diff = Math.abs(m.bw3 - m.bw9);
+    if (diff > TOL) flag('r', 'Y-axis offset issue (BW3 vs BW9)', `Δ${diff.toFixed(3)}mm`);
+    else if (diff > TOL*0.6) flag('a', 'Y-axis offset near limit (BW3 vs BW9)', `Δ${diff.toFixed(3)}mm`);
+    else flag('g', 'Y-axis offset OK (BW3 vs BW9)', `Δ${diff.toFixed(3)}mm`);
   }
 
-  return {flags, verdict, avgH, hDev, maxTaper};
+  // ── TAPER (TW vs BW per position) ────────────────────
+  let maxTaper = null;
+  [1,3,6,9].forEach(p => {
+    const tw = m[`tw${p}`], bw = m[`bw${p}`];
+    if (tw==null||bw==null) return;
+    const taper = Math.abs(tw-bw);
+    if (maxTaper==null||taper>maxTaper) maxTaper=taper;
+    if (taper > TOL) flag('r', `Taper at pos ${p} (TW${p} vs BW${p})`, `Δ${taper.toFixed(3)}mm`);
+    else if (taper > TOL*0.6) flag('a', `Taper at pos ${p} near limit`, `Δ${taper.toFixed(3)}mm`);
+  });
+
+  return {flags, verdict, hDev, maxTaper, twSpread};
 }
 
 function analyzeDice() {
