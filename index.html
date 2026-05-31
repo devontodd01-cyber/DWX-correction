@@ -617,7 +617,8 @@ async function handleText(text, name) {
     await selectMachine(cor.serial);
     return;
   }
-  toast('Could not detect file type','er');
+  toast('Could not detect file type — check console for details','er');
+  console.log('handleText failed. First 200 chars:', text.substring(0,200));
 }
 
 // ══════════════════════════════════════
@@ -627,7 +628,7 @@ function parseSysReport(text) {
   // Must have SerialNumber to be a system report
   const serialM = text.match(/^SerialNumber:\s*(\S+)/im);
   if (!serialM) {
-    console.log('parseSysReport: no SerialNumber found');
+    console.log('parseSysReport: no SerialNumber found in text starting with:', text.substring(0,100));
     return null;
   }
   const serial = serialM[1].trim();
